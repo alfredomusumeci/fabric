@@ -146,6 +146,8 @@ func (a *ApplicationPolicyEvaluator) evaluateChannelConfigPolicyReference(channe
 }
 
 func (a *ApplicationPolicyEvaluator) Evaluate(policyBytes []byte, signatureSet []*protoutil.SignedData) error {
+	logger.Debug("Alfredo: Evaluating application policy")
+
 	p := &peer.ApplicationPolicy{}
 	err := proto.Unmarshal(policyBytes, p)
 	if err != nil {

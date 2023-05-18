@@ -191,6 +191,8 @@ func (vscc *Validator) Validate(
 ) commonerrors.TxValidationError {
 	vscc.stateBasedValidator.PreValidate(uint64(txPosition), block)
 
+	// TODO: might need to add a time-lock for gathering as many signatures as possible
+	// before validating the transaction
 	va, err := vscc.extractValidationArtifacts(block, txPosition, actionPosition)
 	if err != nil {
 		vscc.stateBasedValidator.PostValidate(namespace, block.Header.Number, uint64(txPosition), err)

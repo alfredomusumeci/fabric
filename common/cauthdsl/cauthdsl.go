@@ -50,13 +50,24 @@ func compile(policy *cb.SignaturePolicy, identities []*mb.MSPPrincipal) (func([]
 				}
 			}
 
+			//ORIGINAL CODE
+			//if verified >= t.NOutOf.N {
+			//	cauthdslLogger.Debugf("%p gate %d evaluation succeeds", signedData, grepKey)
+			//} else {
+			//	cauthdslLogger.Debugf("%p gate %d evaluation fails", signedData, grepKey)
+			//}
+
+			// MODIFIED CODE
 			if verified >= t.NOutOf.N {
 				cauthdslLogger.Debugf("%p gate %d evaluation succeeds", signedData, grepKey)
+			} else if verified >= 1 && verified < t.NOutOf.N {
+				cauthdslLogger.Debugf("%p gate %d evaluation succeeds but it has less validators than the specified policy", signedData, grepKey)
 			} else {
 				cauthdslLogger.Debugf("%p gate %d evaluation fails", signedData, grepKey)
 			}
 
-			return verified >= t.NOutOf.N
+			// return verified >= t.NOutOf.N
+			return verified >= t.NOutOf.N || (verified >= 1 && verified < t.NOutOf.N)
 		}, nil
 	case *cb.SignaturePolicy_SignedBy:
 		if t.SignedBy < 0 || t.SignedBy >= int32(len(identities)) {

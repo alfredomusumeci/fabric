@@ -97,6 +97,7 @@ func (p *baseEvaluator) Evaluate(blockNum, txNum uint64, NsRwSets []*rwsetutil.N
 		// if any are present or the chaincode-wide endorsement policy
 		for _, pubWrite := range nsRWSet.KvRwSet.Writes {
 			err := p.checkSBAndCCEP(ns, "", pubWrite.Key, blockNum, txNum, sd)
+			logger.Debug("Alfredo Debug pubWrite: ", err)
 			if err != nil {
 				return err
 			}
@@ -106,6 +107,7 @@ func (p *baseEvaluator) Evaluate(blockNum, txNum uint64, NsRwSets []*rwsetutil.N
 		// if any are present or the chaincode-wide endorsement policy
 		for _, pubMdWrite := range nsRWSet.KvRwSet.MetadataWrites {
 			err := p.checkSBAndCCEP(ns, "", pubMdWrite.Key, blockNum, txNum, sd)
+			logger.Debug("Alfredo Debug pubMdWrite: ", err)
 			if err != nil {
 				return err
 			}
@@ -118,6 +120,7 @@ func (p *baseEvaluator) Evaluate(blockNum, txNum uint64, NsRwSets []*rwsetutil.N
 			for _, hashedWrite := range collRWSet.HashedRwSet.HashedWrites {
 				key := string(hashedWrite.KeyHash)
 				err := p.checkSBAndCCEP(ns, coll, key, blockNum, txNum, sd)
+				logger.Debug("Alfredo Debug collRWSet: ", err)
 				if err != nil {
 					return err
 				}
@@ -131,6 +134,7 @@ func (p *baseEvaluator) Evaluate(blockNum, txNum uint64, NsRwSets []*rwsetutil.N
 			for _, hashedMdWrite := range collRWSet.HashedRwSet.MetadataWrites {
 				key := string(hashedMdWrite.KeyHash)
 				err := p.checkSBAndCCEP(ns, coll, key, blockNum, txNum, sd)
+				logger.Debug("Alfredo Debug collRWSet: ", err)
 				if err != nil {
 					return err
 				}
