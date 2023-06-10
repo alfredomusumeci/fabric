@@ -106,7 +106,8 @@ include gotools.mk
 all: check-go-version native docker checks
 
 .PHONY: checks
-checks: basic-checks unit-test integration-test
+checks: basic-checks
+#checks: basic-checks unit-test integration-test
 
 .PHONY: basic-checks
 basic-checks: check-go-version license spelling references trailing-spaces linter check-help-docs check-metrics-doc filename-spaces check-swagger

@@ -417,6 +417,9 @@ func (v *TxValidator) validateTx(req *blockValidationRequest, results chan<- *bl
 				return
 			}
 			logger.Infow("Config transaction validated and applied to channel resources", "channel", channel)
+		} else if common.HeaderType(chdr.Type) == common.HeaderType_PEER_SIGNATURE_TX {
+			// TODO: implement what we want to happen here, for now just pass it down as validated
+			logger.Debugf("Peer signature transaction validation not implemented, passing down as valid")
 		} else {
 			logger.Warningf("Unknown transaction type [%s] in block number [%d] transaction index [%d]",
 				common.HeaderType(chdr.Type), block.Header.Number, tIdx)

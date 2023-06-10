@@ -25,7 +25,6 @@ var putilsLogger = flogging.MustGetLogger("protoutils")
 // is a valid cert and the signature is valid
 func checkSignatureFromCreator(creatorBytes, sig, msg []byte, ChannelID string, cryptoProvider bccsp.BCCSP) error {
 	putilsLogger.Debugf("begin")
-
 	// check for nil argument
 	if creatorBytes == nil || sig == nil || msg == nil {
 		return errors.New("nil arguments")
@@ -93,6 +92,7 @@ func validateChannelHeader(cHdr *common.ChannelHeader) error {
 	// validate the header type
 	switch common.HeaderType(cHdr.Type) {
 	case common.HeaderType_ENDORSER_TRANSACTION:
+	case common.HeaderType_PEER_SIGNATURE_TX:
 	case common.HeaderType_CONFIG_UPDATE:
 	case common.HeaderType_CONFIG:
 	default:
@@ -271,10 +271,13 @@ func ValidateTransaction(e *common.Envelope, cryptoProvider bccsp.BCCSP) (*commo
 	}
 
 	// validate the signature in the envelope
-	err = checkSignatureFromCreator(shdr.Creator, e.Signature, e.Payload, chdr.ChannelId, cryptoProvider)
-	if err != nil {
-		putilsLogger.Errorf("checkSignatureFromCreator returns err %s", err)
-		return nil, pb.TxValidationCode_BAD_CREATOR_SIGNATURE
+	// ALF: TODO: this is a temporary hack to see if the empty block commit works
+	if chdr.Type != int32(common.HeaderType_PEER_SIGNATURE_TX) {
+		err = checkSignatureFromCreator(shdr.Creator, e.Signature, e.Payload, chdr.ChannelId, cryptoProvider)
+		if err != nil {
+			putilsLogger.Errorf("checkSignatureFromCreator returns err %s", err)
+			return nil, pb.TxValidationCode_BAD_CREATOR_SIGNATURE
+		}
 	}
 
 	// TODO: ensure that creator can transact with us (some ACLs?) which set of APIs is supposed to give us this info?
@@ -313,6 +316,13 @@ func ValidateTransaction(e *common.Envelope, cryptoProvider bccsp.BCCSP) (*commo
 			putilsLogger.Errorf("validateConfigTransaction returns err %s", err)
 			return payload, pb.TxValidationCode_INVALID_CONFIG_TRANSACTION
 		}
+		return payload, pb.TxValidationCode_VALID
+	case common.HeaderType_PEER_SIGNATURE_TX:
+		// These are just "I've seen it" messages, no payload to validate.
+		// For now, just return valid.
+		// TODO: check if the creator is valid.
+		// TODO: if it has already been seen, return an error.
+
 		return payload, pb.TxValidationCode_VALID
 	default:
 		return nil, pb.TxValidationCode_UNSUPPORTED_TX_PAYLOAD
