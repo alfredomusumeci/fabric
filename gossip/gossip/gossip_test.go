@@ -1649,3 +1649,104 @@ func TestMembershipMetrics(t *testing.T) {
 	waitUntilOrFail(t, waitForMembership(0), "waiting for metrics membership of 0")
 	pI0.Stop()
 }
+
+//func testSignGossipMessageFromLeader(t *testing.T) {
+//	// Scenario: there is a leader node P1, and 3 more nodes P2, P3, P4.
+//	// P1 gossips a block of data with its signature on it to all the remaining nodes.
+//	// The remaining nodes verify the signature, accept the block and send it back to P1 with
+//	// their signature on it for P1 to store it locally.
+//
+//	// Create a leader node P1
+//	port1, grpc1, certs1, secDialOpts1, _ := util.CreateGRPCLayer()
+//	pI1 := newGossipInstanceWithGrpcMcs(1, port1, grpc1, certs1, secDialOpts1, 100, &naiveCryptoService{})
+//	pI1.JoinChan(&joinChanMsg{}, common.ChainID("A"))
+//	pI1.UpdateLedgerHeight(1, common.ChainID("A"))
+//
+//	// Create 3 more nodes P2, P3, P4
+//	port2, grpc2, certs2, secDialOpts2, _ := util.CreateGRPCLayer()
+//	pI2 := newGossipInstanceWithGrpcMcs(2, port2, grpc2, certs2, secDialOpts2, 100, &naiveCryptoService{})
+//	pI2.JoinChan(&joinChanMsg{}, common.ChainID("A"))
+//	pI2.UpdateLedgerHeight(1, common.ChainID("A"))
+//
+//	port3, grpc3, certs3, secDialOpts3, _ := util.CreateGRPCLayer()
+//	pI3 := newGossipInstanceWithGrpcMcs(3, port3, grpc3, certs3, secDialOpts3, 100, &naiveCryptoService{})
+//	pI3.JoinChan(&joinChanMsg{}, common.ChainID("A"))
+//	pI3.UpdateLedgerHeight(1, common.ChainID("A"))
+//
+//	port4, grpc4, certs4, secDialOpts4, _ := util.CreateGRPCLayer()
+//	pI4 := newGossipInstanceWithGrpcMcs(4, port4, grpc4, certs4, secDialOpts4, 100, &naiveCryptoService{})
+//	pI4.JoinChan(&joinChanMsg{}, common.ChainID("A"))
+//	pI4.UpdateLedgerHeight(1, common.ChainID("A"))
+//
+//	// Create a block of data
+//	block := &common.Block{
+//		Header: &common.BlockHeader{
+//			Number: 1,
+//		},
+//		Data: &common.BlockData{
+//			Data: [][]byte{[]byte("some data")},
+//		},
+//	}
+//
+//	// Sign the block with P1's signature
+//	signedBlock, err := pI1.signBlock(block)
+//	require.NoError(t, err)
+//
+//	// Gossip the block to all the nodes
+//	pI1.gossipBlock(signedBlock, common.ChainID("A"))
+//
+//	// Wait for all the nodes to receive the block
+//	waitUntilOrFail(t, checkPeersMembership(t, []*gossipGRPC{pI1, pI2, pI3, pI4}, 4), "waiting for all peers to receive the block")
+//
+//	// Verify the signature of the block received by P2
+//	err = pI2.verifyBlock(signedBlock)
+//	require.NoError(t, err)
+//
+//	// Verify the signature of the block received by P3
+//	err = pI3.verifyBlock(signedBlock)
+//	require.NoError(t, err)
+//
+//	// Verify the signature of the block received by P4
+//	err = pI4.verifyBlock(signedBlock)
+//	require.NoError(t, err)
+//
+//	// Sign the block received by P2 with P2's signature
+//	signedBlock2, err := pI2.signBlock(signedBlock)
+//	require.NoError(t, err)
+//
+//	// Sign the block received by P3 with P3's signature
+//	signedBlock3, err := pI3.signBlock(signedBlock)
+//	require.NoError(t, err)
+//
+//	// Sign the block received by P4 with P4's signature
+//	signedBlock4, err := pI4.signBlock(signedBlock)
+//
+//	// Send the signed blocks back to P1
+//	pI2.gossipBlock(signedBlock2, common.ChainID("A"))
+//	pI3.gossipBlock(signedBlock3, common.ChainID("A"))
+//	pI4.gossipBlock(signedBlock4, common.ChainID("A"))
+//
+//	// Wait for P1 to receive the signed blocks
+//	waitUntilOrFail(t, checkPeersMembership(t, []*gossipGRPC{pI1}, 4), "waiting for P1 to receive the signed blocks")
+//
+//	// Verify the signature of the block received by P1 from P2
+//	err = pI1.verifyBlock(signedBlock2)
+//	require.NoError(t, err)
+//
+//	// Verify the signature of the block received by P1 from P3
+//	err = pI1.verifyBlock(signedBlock3)
+//	require.NoError(t, err)
+//
+//	// Verify the signature of the block received by P1 from P4
+//	err = pI1.verifyBlock(signedBlock4)
+//	require.NoError(t, err)
+//
+//	// Stop all the nodes
+//	pI1.Stop()
+//	pI2.Stop()
+//	pI3.Stop()
+//	pI4.Stop()
+//
+//	// Wait for all the nodes to stop
+//	waitUntilOrFail(t, checkPeersMembership(t, []*gossipGRPC{pI1, pI2, pI3, pI4}, 0), "waiting for all peers to stop")
+//}

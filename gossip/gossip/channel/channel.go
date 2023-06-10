@@ -599,6 +599,8 @@ func (gc *gossipChannel) ConfigureChannel(joinMsg api.JoinChannelMessage) {
 
 // HandleMessage processes a message sent by a remote peer
 func (gc *gossipChannel) HandleMessage(msg protoext.ReceivedMessage) {
+	gc.logger.Debug("Alfredo: Handling message", msg.GetGossipMessage())
+
 	if !gc.verifyMsg(msg) {
 		gc.logger.Warning("Failed verifying message:", msg.GetGossipMessage().GossipMessage)
 		return
@@ -646,6 +648,54 @@ func (gc *gossipChannel) HandleMessage(msg protoext.ReceivedMessage) {
 				return
 			}
 			gc.Lock()
+
+			//ALFREDO
+			// Create an idSigner function for this peer to sign the block
+			//idSigner := func(message []byte) ([]byte, error) {
+			//	id := gc.GetIdentityByPKIID(msg.GetConnectionInfo().ID)
+			//	if len(id) == 0 {
+			//		return nil, errors.New("identity not found")
+			//	}
+			//	return id, nil
+			//}
+			//gc.logger.Debug("Alfredo: the idSigner is ", idSigner)
+
+			//// Create a signed message out of msg with this peer signature id
+			//signedMsg, err := msg.GetGossipMessage().Sign(idSigner)
+			//if err != nil {
+			//	// Convert bytes to string
+			//	payload := string(m.GetDataMsg().Payload.Data)
+			//	gc.logger.Warning("Alfredo: Failed signing block", payload)
+			//	return
+			//}
+
+			// Create block with the signed message (also needs to create a tx I believe)
+			gc.logger.Debug("Alfredo: Creating block")
+
+			//block := cb.Block{}
+			//block.Header = &cb.BlockHeader{}
+			//block.Data = &cb.BlockData{}
+			//
+			//id, _ := idSigner(m.GetPayload())
+			//var metadataContents [][]byte
+			//metadataContents = append(metadataContents, id)
+			//block.Metadata = &cb.BlockMetadata{Metadata: metadataContents}
+			//
+			//blockAndPvtData := ledger.BlockAndPvtData{}
+			//blockAndPvtData.Block = &block
+			//blockAndPvtData.PvtData = nil
+			//blockAndPvtData.MissingPvtData = nil
+
+			peerInfo := gc.GetPeers()
+			gc.logger.Debug("Alfredo: the peerInfo is ", peerInfo)
+
+			//err := committer.LedgerCommitter{}.CommitLegacy(&blockAndPvtData, nil)
+			//if err != nil {
+			//	gc.logger.Debug("Alfredo: Failed committing block", err)
+			//	return
+			//}
+
+			//END ALFREDO
 			added = gc.blockMsgStore.Add(msg.GetGossipMessage())
 			if added {
 				gc.logger.Debugf("Adding %v to the block puller", msg.GetGossipMessage())
@@ -667,6 +717,9 @@ func (gc *gossipChannel) HandleMessage(msg protoext.ReceivedMessage) {
 	}
 
 	if protoext.IsPullMsg(m.GossipMessage) && protoext.GetPullMsgType(m.GossipMessage) == proto.PullMsgType_BLOCK_MSG {
+		peerInfo := gc.GetPeers()
+		gc.logger.Debug("Alfredo: the peerInfo is ", peerInfo)
+
 		if gc.hasLeftChannel() {
 			gc.logger.Info("Received Pull message from", msg.GetConnectionInfo().Endpoint, "but left the channel", string(gc.chainID))
 			return
