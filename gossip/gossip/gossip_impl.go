@@ -68,6 +68,36 @@ type Node struct {
 	gossipMetrics     *metrics.GossipMetrics
 }
 
+func (g *Node) BlockCommitted() {
+	g.logger.Debug("ALF: BlockCommitted called")
+	// Generate random nonce from a random number
+	nonce := uint64(11111111111111111111)
+	g.logger.Debugf("ALF: BlockCommitted nonce: %d", nonce)
+	// Packages the block into pg.GossipMessage
+	gossipMsg := &pg.GossipMessage{
+		Channel: []byte(common.ChannelID("mychannel")),
+		Nonce:   nonce,
+		Tag:     pg.GossipMessage_APPROVAL,
+		// TODO: use appropriate msg type
+		//Content: &pg.GossipMessage_MemReq{
+		//	MemReq: &pg.MembershipRequest{},
+		//},
+		Content: &pg.GossipMessage_ApprovalMessage{
+			ApprovalMessage: &pg.ApprovalMessage{},
+		},
+	}
+	// check if channel mychannel exists
+	gossipChan := g.chanState.getGossipChannelByChainID(common.ChannelID("mychannel"))
+	g.logger.Debug("ALF: BlockCommitted gossipChan: ", gossipChan)
+	// If the channel exists, then send the gossip message
+	// to the peers in the channel
+	if gossipChan != nil {
+		g.logger.Debug("ALF: Gossiping the message")
+		g.Gossip(gossipMsg)
+	}
+	g.logger.Debug("ALF: BlockCommitted finished")
+}
+
 // New creates a gossip instance attached to a gRPC server
 func New(conf *Config, s *grpc.Server, sa api.SecurityAdvisor,
 	mcs api.MessageCryptoService, selfIdentity api.PeerIdentityType,
@@ -347,7 +377,15 @@ func (g *Node) handleMessage(m protoext.ReceivedMessage) {
 		return
 	}
 
+	tag := msg.GetTag()
+	g.logger.Debug("ALF: Message tag: ", tag)
+	if tag == pg.GossipMessage_APPROVAL {
+		g.logger.Debug("ALF: Received an approval message")
+	}
+	g.logger.Debug("ALF: ", msg.GetContent())
+
 	if protoext.IsChannelRestricted(msg.GossipMessage) {
+		g.logger.Debug("ALF: Channel: ", g.chanState.lookupChannelForMsg(m), " is restricted")
 		if gc := g.chanState.lookupChannelForMsg(m); gc == nil {
 			// If we're not in the channel, we should still forward to peers of our org
 			// in case it's a StateInfo message
@@ -412,6 +450,7 @@ func (g *Node) validateMsg(msg protoext.ReceivedMessage) bool {
 		return false
 	}
 
+	// TODO: might want to verify for approval messages too, i.e. check if the identity is who it claims to be
 	if protoext.IsStateInfoMsg(msg.GetGossipMessage().GossipMessage) {
 		if err := g.validateStateInfoMsg(msg.GetGossipMessage()); err != nil {
 			g.logger.Warningf("StateInfo message %v is found invalid: %v", msg, err)
@@ -452,6 +491,9 @@ func (g *Node) gossipBatch(msgs []*emittedGossipMessage) {
 	var orgMsgs []*emittedGossipMessage
 	var leadershipMsgs []*emittedGossipMessage
 
+	isApproval := func(o interface{}) bool {
+		return protoext.IsApprovalMsg(o.(*emittedGossipMessage).GossipMessage)
+	}
 	isABlock := func(o interface{}) bool {
 		return protoext.IsDataMsg(o.(*emittedGossipMessage).GossipMessage)
 	}
@@ -472,6 +514,13 @@ func (g *Node) gossipBatch(msgs []*emittedGossipMessage) {
 	isLeadershipMsg := func(o interface{}) bool {
 		return protoext.IsLeadershipMsg(o.(*emittedGossipMessage).GossipMessage)
 	}
+
+	// Gossip empty messages
+	approvalMsgs, msgs := partitionMessages(isApproval, msgs)
+	g.gossipInChan(approvalMsgs, func(gc channel.GossipChannel) filter.RoutingFilter {
+		// TODO: play with these filters
+		return filter.CombineRoutingFilters()
+	})
 
 	// Gossip blocks
 	blocks, msgs = partitionMessages(isABlock, msgs)
@@ -584,6 +633,7 @@ func (g *Node) gossipInChan(messages []*emittedGossipMessage, chanRoutingFactory
 
 		// Send the messages to the remote peers
 		for _, msg := range messagesOfChannel {
+			g.logger.Debug("ALF: sending message with tag: ", msg.GetTag())
 			filteredPeers := g.removeSelfLoop(msg, peers2Send)
 			g.comm.Send(msg.SignedGossipMessage, filteredPeers...)
 		}
@@ -653,6 +703,7 @@ func (g *Node) SendByCriteria(msg *protoext.SignedGossipMessage, criteria SendCr
 func (g *Node) Gossip(msg *pg.GossipMessage) {
 	// Educate developers to Gossip messages with the right tags.
 	// See IsTagLegal() for wanted behavior.
+	g.logger.Debugf("ALF: Gossiping msg: %s", msg.GetTag())
 	if err := protoext.IsTagLegal(msg); err != nil {
 		panic(errors.WithStack(err))
 	}
@@ -663,19 +714,23 @@ func (g *Node) Gossip(msg *pg.GossipMessage) {
 
 	var err error
 	if protoext.IsDataMsg(sMsg.GossipMessage) {
+		g.logger.Debug("1 tag: ", sMsg.GossipMessage.GetTag())
 		sMsg, err = protoext.NoopSign(sMsg.GossipMessage)
 	} else {
+		g.logger.Debug("2 tag: ", sMsg.GossipMessage.GetTag())
 		_, err = sMsg.Sign(func(msg []byte) ([]byte, error) {
 			return g.mcs.Sign(msg)
 		})
 	}
 
 	if err != nil {
+		g.logger.Debug("3 tag: ", sMsg.GossipMessage.GetTag())
 		g.logger.Warningf("Failed signing message: %+v", errors.WithStack(err))
 		return
 	}
 
 	if protoext.IsChannelRestricted(msg) {
+		g.logger.Debug("4 tag: ", sMsg.GossipMessage.GetTag())
 		gc := g.chanState.getGossipChannelByChainID(msg.Channel)
 		if gc == nil {
 			g.logger.Warning("Failed obtaining gossipChannel of", msg.Channel, "aborting")
@@ -685,7 +740,7 @@ func (g *Node) Gossip(msg *pg.GossipMessage) {
 			gc.AddToMsgStore(sMsg)
 		}
 	}
-
+	g.logger.Debug("5 tag: ", sMsg.GossipMessage.GetTag())
 	if g.conf.PropagateIterations == 0 {
 		return
 	}

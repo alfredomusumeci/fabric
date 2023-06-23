@@ -25,6 +25,11 @@ func MembershipResponseToString(mr *gossip.MembershipResponse) string {
 	return fmt.Sprintf("MembershipResponse with Alive: %d, Dead: %d", len(mr.Alive), len(mr.Dead))
 }
 
+func ApprovalMessageToString(am *gossip.ApprovalMessage) string {
+	// TODO: unmarshal and print metadata
+	return fmt.Sprint("Approval Message. Nonce:", am.Nonce, "PKI-id:", hex.EncodeToString(am.PkiId), "channel MAC:", hex.EncodeToString(am.Channel_MAC))
+}
+
 // AliveMessageToString of AliveMessage prints Alive Message, Identity and Timestamp
 func AliveMessageToString(am *gossip.AliveMessage) string {
 	if am.Membership == nil {

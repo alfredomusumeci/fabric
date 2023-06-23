@@ -243,6 +243,7 @@ func (conn *connection) send(msg *protoext.SignedGossipMessage, onErr func(error
 
 	select {
 	case conn.outBuff <- m:
+		conn.logger.Debugf("ALF: Sent message %s to %s with tag %s", msg, conn.info.Endpoint, msg.GetTag())
 		// room in channel, successfully sent message, nothing to do
 	case <-conn.stopChan:
 		conn.logger.Debugf("Aborting send() to %s because connection is closing", conn.info.Endpoint)

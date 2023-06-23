@@ -8,8 +8,6 @@ package state
 
 import (
 	"bytes"
-	"github.com/hyperledger/fabric-protos-go/msp"
-	util2 "github.com/hyperledger/fabric/common/util"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -793,11 +791,11 @@ func (s *GossipStateProviderImpl) straggler(currHeight uint64, receivedPayload *
 func (s *GossipStateProviderImpl) commitBlock(block *common.Block, pvtData util.PvtDataCollections) error {
 	t1 := time.Now()
 
-	// Temporarily skipping the problem of updating the ledger height appropriately
-	height, _ := s.ledger.LedgerHeight()
-	if block.Header.Number < height {
-		block.Header.Number = height
-	}
+	//// TODO: Temporarily skipping the problem of updating the ledger height appropriately
+	//height, _ := s.ledger.LedgerHeight()
+	//if block.Header.Number < height {
+	//	block.Header.Number = height
+	//}
 
 	// Commit block with available private transactions
 	if err := s.ledger.StoreBlock(block, pvtData); err != nil {
@@ -815,73 +813,60 @@ func (s *GossipStateProviderImpl) commitBlock(block *common.Block, pvtData util.
 
 	s.stateMetrics.Height.With("channel", s.chainID).Set(float64(block.Header.Number + 1))
 	///////////////////////
-	s.logger.Debugf("Adding empty block")
-
-	// Create empty block
-	emptyBlock := &common.Block{
-		Header: &common.BlockHeader{
-			Number: block.Header.Number + 1,
-		},
-		Data: &common.BlockData{
-			Data: [][]byte{},
-		},
-		Metadata: &common.BlockMetadata{
-			Metadata: [][]byte{},
-		},
-	}
-
-	// Create a signer, can be any identity as of now
-	//identityDir := filepath.Join(testdir, "crypto-config", "peerOrganizations", "org1.example.com", "users", "User1@org1.example.com", "msp")
-	//certPath := filepath.Join(identityDir, "signcerts", "User1@org1.example.com-cert.pem")
-	//keyPath := filepath.Join(identityDir, "keystore")
-	//keys, err := ioutil.ReadDir(keyPath)
-	//require.NoError(t, err)
-	//require.Len(t, keys, 1)
-	//keyPath = filepath.Join(keyPath, keys[0].Name())
-	//signer, err := newSigner("Org1MSP", certPath, keyPath)
-	//require.NoError(t, err)
-	//return signer
-	//signer, err := signer.NewSigner('Org1MSP')
+	//s.logger.Debugf("Adding empty block")
+	//
+	//// Create empty block
+	//emptyBlock := &common.Block{
+	//	Header: &common.BlockHeader{
+	//		Number: block.Header.Number + 1,
+	//	},
+	//	Data: &common.BlockData{
+	//		Data: [][]byte{},
+	//	},
+	//	Metadata: &common.BlockMetadata{
+	//		Metadata: [][]byte{},
+	//	},
+	//}
 
 	// Dummy TX for the moment being
-	creator := protoutil.MarshalOrPanic(&msp.SerializedIdentity{
-		Mspid:   "OrgDummyTest",
-		IdBytes: []byte("creator"),
-	})
-	nonce := make([]byte, 24)
-	txid := protoutil.ComputeTxID(creator, nonce)
-
-	emptyBlock.Data = &common.BlockData{
-		Data: [][]byte{
-			protoutil.MarshalOrPanic(&common.Envelope{
-				Payload: protoutil.MarshalOrPanic(&common.Payload{
-					Header: &common.Header{
-						ChannelHeader: protoutil.MarshalOrPanic(&common.ChannelHeader{
-							Type:      int32(common.HeaderType_PEER_SIGNATURE_TX),
-							TxId:      txid,
-							ChannelId: s.chainID,
-							Timestamp: util2.CreateUtcTimestamp(),
-						}),
-						// Make sure to create a nonce and creator appropriately, otherwise will fail in validation
-						SignatureHeader: protoutil.MarshalOrPanic(&common.SignatureHeader{
-							Creator: creator,
-							Nonce:   nonce,
-						}),
-					},
-					Data: []byte{'d', 'u', 'm', 'm', 'y'},
-				}),
-				Signature: []byte("signature"),
-			}),
-		},
-	}
-
-	// Commit empty block
-	if err := s.ledger.StoreBlock(emptyBlock, nil); err != nil {
-		s.logger.Errorf("Empty block: got error while committing(%+v)", errors.WithStack(err))
-		return err
-	}
-
-	s.logger.Debugf("Empty block committed")
+	//creator := protoutil.MarshalOrPanic(&msp.SerializedIdentity{
+	//	Mspid:   "OrgDummyTest",
+	//	IdBytes: []byte("creator"),
+	//})
+	//nonce := make([]byte, 24)
+	//txid := protoutil.ComputeTxID(creator, nonce)
+	//
+	//emptyBlock.Data = &common.BlockData{
+	//	Data: [][]byte{
+	//		protoutil.MarshalOrPanic(&common.Envelope{
+	//			Payload: protoutil.MarshalOrPanic(&common.Payload{
+	//				Header: &common.Header{
+	//					ChannelHeader: protoutil.MarshalOrPanic(&common.ChannelHeader{
+	//						Type:      int32(common.HeaderType_PEER_SIGNATURE_TX),
+	//						TxId:      txid,
+	//						ChannelId: s.chainID,
+	//						Timestamp: util2.CreateUtcTimestamp(),
+	//					}),
+	//					// Make sure to create a nonce and creator appropriately, otherwise will fail in validation
+	//					SignatureHeader: protoutil.MarshalOrPanic(&common.SignatureHeader{
+	//						Creator: creator,
+	//						Nonce:   nonce,
+	//					}),
+	//				},
+	//				Data: []byte{'d', 'u', 'm', 'm', 'y'},
+	//			}),
+	//			Signature: []byte("signature"),
+	//		}),
+	//	},
+	//}
+	//
+	//// Commit empty block
+	//if err := s.ledger.StoreBlock(emptyBlock, nil); err != nil {
+	//	s.logger.Errorf("Empty block: got error while committing(%+v)", errors.WithStack(err))
+	//	return err
+	//}
+	//
+	//s.logger.Debugf("Empty block committed")
 	///////////////////////
 	return nil
 }

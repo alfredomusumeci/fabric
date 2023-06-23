@@ -38,6 +38,15 @@ type Initializer struct {
 	Config                          *Config
 	CustomTxProcessors              map[common.HeaderType]CustomTxProcessor
 	HashProvider                    HashProvider
+	BlockCommitter                  GossipBlockCommitter
+}
+
+// GossipBlockCommitter is an interface that allows the ledger to notify the gossip layer
+// that a block has been committed. This is used to trigger the gossip layer to broadcast
+// the block to peers. See its implementation in gossip_service.go
+type GossipBlockCommitter interface {
+	// BlockCommitted Gossips block after being committed
+	BlockCommitted()
 }
 
 // Config is a structure used to configure a ledger provider.
@@ -224,6 +233,10 @@ type PeerLedger interface {
 	// CommitNotifications channel to close. There is expected to be only one consumer at a time. The function returns error
 	// if already a CommitNotification channel is active.
 	CommitNotificationsChannel(done <-chan struct{}) (<-chan *CommitNotification, error)
+
+	//TODO: remove this or implement it
+	//SetBlockCommitterGossipService allows to change the GossipService
+	SetBlockCommitterGossipService(gossipService GossipBlockCommitter)
 }
 
 // SimpleQueryExecutor encapsulates basic functions

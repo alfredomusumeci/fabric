@@ -9,7 +9,6 @@ package kvledger
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/hyperledger/fabric/gossip/service"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -73,14 +72,6 @@ type kvLedger struct {
 
 	commitNotifierLock sync.Mutex
 	commitNotifier     *commitNotifier
-
-	// blockCommitter is used to gossip the very last committed block
-	blockCommitter service.GossipBlockCommitter
-}
-
-// TODO: implement this or remove it
-func (l *kvLedger) SetBlockCommitterGossipService(gossipService ledger.GossipBlockCommitter) {
-	l.blockCommitter = gossipService
 }
 
 type lgrInitializer struct {
@@ -100,7 +91,6 @@ type lgrInitializer struct {
 	customTxProcessors       map[common.HeaderType]ledger.CustomTxProcessor
 	hashProvider             ledger.HashProvider
 	config                   *ledger.Config
-	blockCommitter           service.GossipBlockCommitter
 }
 
 func newKVLedger(initializer *lgrInitializer) (*kvLedger, error) {
@@ -115,7 +105,6 @@ func newKVLedger(initializer *lgrInitializer) (*kvLedger, error) {
 		hashProvider:         initializer.hashProvider,
 		config:               initializer.config,
 		blockAPIsRWLock:      &sync.RWMutex{},
-		blockCommitter:       initializer.blockCommitter,
 	}
 
 	btlPolicy := pvtdatapolicy.ConstructBTLPolicy(&collectionInfoRetriever{ledgerID, l, initializer.ccInfoProvider})
@@ -613,16 +602,6 @@ func (l *kvLedger) CommitLegacy(pvtdataAndBlock *ledger.BlockAndPvtData, commitO
 
 	if err := l.commit(pvtdataAndBlock, commitOpts); err != nil {
 		return err
-	}
-
-	// We know that the block has been committed here
-	logger.Debug("ALF: Checking if blockCommitter is a valid object... ", l.blockCommitter)
-	//TODO: Find a better way to check against != nil given that blockCommitter is an interface
-	//if bc, ok := l.blockCommitter.(service.GossipBlockCommitterImpl); ok && bc != nil {
-	if l.blockCommitter != nil {
-		logger.Debug("ALF: Telling blockCommitter...")
-		l.blockCommitter.BlockCommitted()
-		logger.Debug("ALF: Told blockCommitter")
 	}
 
 	l.snapshotMgr.events <- &event{commitDone, blockNumber}

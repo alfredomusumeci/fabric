@@ -599,6 +599,9 @@ func (gc *gossipChannel) ConfigureChannel(joinMsg api.JoinChannelMessage) {
 
 // HandleMessage processes a message sent by a remote peer
 func (gc *gossipChannel) HandleMessage(msg protoext.ReceivedMessage) {
+	gc.logger.Debug("ALF: Handling message", msg.GetGossipMessage())
+	gc.logger.Debug("ALF: this is channel", gc.chainID.String())
+
 	if !gc.verifyMsg(msg) {
 		gc.logger.Warning("Failed verifying message:", msg.GetGossipMessage().GossipMessage)
 		return
@@ -619,6 +622,14 @@ func (gc *gossipChannel) HandleMessage(msg protoext.ReceivedMessage) {
 		return
 	}
 
+	// Find out whether its info/pull/data msg etc..
+	gc.logger.Debug("ALF: IsDataMsg:", protoext.IsDataMsg(m.GossipMessage))
+	gc.logger.Debug("ALF: IsStateInfoMsg:", protoext.IsStateInfoMsg(m.GossipMessage))
+	gc.logger.Debug("ALF: IsStateInfoPullRequestMsg:", protoext.IsStateInfoPullRequestMsg(m.GossipMessage))
+	gc.logger.Debug("ALF: IsStateInfoSnapshot:", protoext.IsStateInfoSnapshot(m.GossipMessage))
+	gc.logger.Debug("ALF: IsAliveMsg:", protoext.IsAliveMsg(m.GossipMessage))
+	gc.logger.Debug("ALF: IsLeadershipMsg:", protoext.IsLeadershipMsg(m.GossipMessage))
+
 	if protoext.IsStateInfoPullRequestMsg(m.GossipMessage) {
 		msg.Respond(gc.createStateInfoSnapshot(orgID))
 		return
@@ -633,6 +644,8 @@ func (gc *gossipChannel) HandleMessage(msg protoext.ReceivedMessage) {
 		added := false
 
 		if protoext.IsDataMsg(m.GossipMessage) {
+			gc.logger.Debug("ALF: Data Message:", m.String())
+
 			if m.GetDataMsg().Payload == nil {
 				gc.logger.Warning("Payload is empty, got it from", msg.GetConnectionInfo().ID)
 				return
@@ -682,6 +695,8 @@ func (gc *gossipChannel) HandleMessage(msg protoext.ReceivedMessage) {
 			return
 		}
 		if protoext.IsDataUpdate(m.GossipMessage) {
+			gc.logger.Debug("PULL ALF: DataUpdate message:", m.String())
+
 			// Iterate over the envelopes, and filter out blocks
 			// that we already have in the blockMsgStore, or blocks that
 			// are too far in the past.

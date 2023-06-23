@@ -49,6 +49,12 @@ func IsRemoteStateMessage(m *gossip.GossipMessage) bool {
 	return m.GetStateRequest() != nil || m.GetStateResponse() != nil
 }
 
+// IsApprovalMsg returns whether this GossipMessage is a message signifying that the channel leader
+// has signed and published a sensory transaction
+func IsApprovalMsg(m *gossip.GossipMessage) bool {
+	return m.GetApprovalMessage() != nil
+}
+
 // GetPullMsgType returns the phase of the pull mechanism this GossipMessage belongs to
 // for example: Hello, Digest, etc.
 // If this isn't a pull message, PullMsgType_UNDEFINED is returned.
@@ -75,7 +81,9 @@ func GetPullMsgType(m *gossip.GossipMessage) gossip.PullMsgType {
 // IsChannelRestricted returns whether this GossipMessage should be routed
 // only in its channel
 func IsChannelRestricted(m *gossip.GossipMessage) bool {
-	return m.Tag == gossip.GossipMessage_CHAN_AND_ORG || m.Tag == gossip.GossipMessage_CHAN_ONLY || m.Tag == gossip.GossipMessage_CHAN_OR_ORG
+	// TODO: remove gossipMessage_approval if not needed
+	chanMsg := m.Tag == gossip.GossipMessage_CHAN_AND_ORG || m.Tag == gossip.GossipMessage_CHAN_ONLY || m.Tag == gossip.GossipMessage_CHAN_OR_ORG
+	return chanMsg || m.Tag == gossip.GossipMessage_APPROVAL
 }
 
 // IsOrgRestricted returns whether this GossipMessage should be routed only
@@ -182,5 +190,12 @@ func IsTagLegal(m *gossip.GossipMessage) error {
 		return nil
 	}
 
-	return fmt.Errorf("Unknown message type: %v", m)
+	if IsApprovalMsg(m) {
+		if m.Tag != gossip.GossipMessage_APPROVAL {
+			return fmt.Errorf("tag should be %s", gossip.GossipMessage_Tag_name[int32(gossip.GossipMessage_APPROVAL)])
+		}
+		return nil
+	}
+
+	return nil
 }

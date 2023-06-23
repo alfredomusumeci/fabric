@@ -9,6 +9,7 @@ package ledgermgmt
 import (
 	"bytes"
 	"fmt"
+	"github.com/hyperledger/fabric/gossip/service"
 	"sync"
 
 	"github.com/hyperledger/fabric-protos-go/common"
@@ -59,6 +60,7 @@ type Initializer struct {
 	Config                          *ledger.Config
 	HashProvider                    ledger.HashProvider
 	EbMetadataProvider              MetadataProvider
+	BlockCommitter                  service.GossipBlockCommitter
 }
 
 // NewLedgerMgr creates a new LedgerMgr
@@ -79,6 +81,7 @@ func NewLedgerMgr(initializer *Initializer) *LedgerMgr {
 			Config:                          initializer.Config,
 			CustomTxProcessors:              initializer.CustomTxProcessors,
 			HashProvider:                    initializer.HashProvider,
+			BlockCommitter:                  initializer.BlockCommitter,
 		},
 	)
 	if err != nil {
