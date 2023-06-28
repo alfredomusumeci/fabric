@@ -196,8 +196,10 @@ func (m *SignedGossipMessage) String() string {
 			gMsg = DataRequestToString(m.GetDataReq())
 		} else if m.GetLeadershipMsg() != nil {
 			gMsg = LeadershipMessageToString(m.GetLeadershipMsg())
-		} else if m.GetApprovalMessage() != nil {
-			gMsg = ApprovalMessageToString(m.GetApprovalMessage())
+		} else if m.GetApprovalRequest() != nil {
+			gMsg = ApprovalMessageRequestToString(m.GetApprovalRequest())
+		} else if m.GetApprovalResponse() != nil {
+			gMsg = ApprovalMessageResponseToString(m.GetApprovalResponse())
 		} else {
 			gMsg = m.GossipMessage.String()
 			isSimpleMsg = true

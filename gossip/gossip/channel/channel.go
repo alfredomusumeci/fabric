@@ -599,8 +599,8 @@ func (gc *gossipChannel) ConfigureChannel(joinMsg api.JoinChannelMessage) {
 
 // HandleMessage processes a message sent by a remote peer
 func (gc *gossipChannel) HandleMessage(msg protoext.ReceivedMessage) {
-	gc.logger.Debug("ALF: Handling message", msg.GetGossipMessage())
-	gc.logger.Debug("ALF: this is channel", gc.chainID.String())
+	gc.logger.Debug("BLOCC: Handling message", msg.GetGossipMessage())
+	gc.logger.Debug("BLOCC: this is channel", gc.chainID.String())
 
 	if !gc.verifyMsg(msg) {
 		gc.logger.Warning("Failed verifying message:", msg.GetGossipMessage().GossipMessage)
@@ -623,12 +623,30 @@ func (gc *gossipChannel) HandleMessage(msg protoext.ReceivedMessage) {
 	}
 
 	// Find out whether its info/pull/data msg etc..
-	gc.logger.Debug("ALF: IsDataMsg:", protoext.IsDataMsg(m.GossipMessage))
-	gc.logger.Debug("ALF: IsStateInfoMsg:", protoext.IsStateInfoMsg(m.GossipMessage))
-	gc.logger.Debug("ALF: IsStateInfoPullRequestMsg:", protoext.IsStateInfoPullRequestMsg(m.GossipMessage))
-	gc.logger.Debug("ALF: IsStateInfoSnapshot:", protoext.IsStateInfoSnapshot(m.GossipMessage))
-	gc.logger.Debug("ALF: IsAliveMsg:", protoext.IsAliveMsg(m.GossipMessage))
-	gc.logger.Debug("ALF: IsLeadershipMsg:", protoext.IsLeadershipMsg(m.GossipMessage))
+	gc.logger.Debug("BLOCC: IsDataMsg:", protoext.IsDataMsg(m.GossipMessage))
+	gc.logger.Debug("BLOCC: IsStateInfoMsg:", protoext.IsStateInfoMsg(m.GossipMessage))
+	gc.logger.Debug("BLOCC: IsStateInfoPullRequestMsg:", protoext.IsStateInfoPullRequestMsg(m.GossipMessage))
+	gc.logger.Debug("BLOCC: IsStateInfoSnapshot:", protoext.IsStateInfoSnapshot(m.GossipMessage))
+	gc.logger.Debug("BLOCC: IsAliveMsg:", protoext.IsAliveMsg(m.GossipMessage))
+	gc.logger.Debug("BLOCC: IsLeadershipMsg:", protoext.IsLeadershipMsg(m.GossipMessage))
+	gc.logger.Debug("BLOCC: IsApprovalRequestMsg", protoext.IsApprovalRequestMsg(m.GossipMessage))
+	gc.logger.Debug("BLOCC: IsApprovalResponseMsg", protoext.IsApprovalResponseMsg(m.GossipMessage))
+
+	if protoext.IsApprovalRequestMsg(m.GossipMessage) {
+		gc.logger.Debug("BLOCC: Inside HandleMessage For Approval:", m.String())
+		senderIdentity := gc.GetIdentityByPKIID(msg.GetConnectionInfo().ID)
+		receiverPkiId := gc.Self().GetStateInfo().GetPkiId()
+		receiverIdentity := gc.GetIdentityByPKIID(receiverPkiId)
+
+		if bytes.Equal(senderIdentity, receiverIdentity) {
+			gc.logger.Debug("BLOCC: Sender and Receiver are same, so ignoring the message")
+			return
+		}
+		// TODO: Generate a response message and send it back to channel.go
+		gc.logger.Debug("BLOCC: Sender and Receiver are different, so processing the message")
+		msg.Respond(gc.createApprovalMessageResponse(receiverIdentity))
+		return
+	}
 
 	if protoext.IsStateInfoPullRequestMsg(m.GossipMessage) {
 		msg.Respond(gc.createStateInfoSnapshot(orgID))
@@ -644,7 +662,7 @@ func (gc *gossipChannel) HandleMessage(msg protoext.ReceivedMessage) {
 		added := false
 
 		if protoext.IsDataMsg(m.GossipMessage) {
-			gc.logger.Debug("ALF: Data Message:", m.String())
+			gc.logger.Debug("BLOCC: Data Message:", m.String())
 
 			if m.GetDataMsg().Payload == nil {
 				gc.logger.Warning("Payload is empty, got it from", msg.GetConnectionInfo().ID)
@@ -695,7 +713,7 @@ func (gc *gossipChannel) HandleMessage(msg protoext.ReceivedMessage) {
 			return
 		}
 		if protoext.IsDataUpdate(m.GossipMessage) {
-			gc.logger.Debug("PULL ALF: DataUpdate message:", m.String())
+			gc.logger.Debug("PULL BLOCC: DataUpdate message:", m.String())
 
 			// Iterate over the envelopes, and filter out blocks
 			// that we already have in the blockMsgStore, or blocks that
@@ -868,6 +886,21 @@ func (gc *gossipChannel) createStateInfoSnapshot(requestersOrg api.OrgIdentityTy
 		Content: &proto.GossipMessage_StateSnapshot{
 			StateSnapshot: &proto.StateInfoSnapshot{
 				Elements: elements,
+			},
+		},
+	}
+}
+
+// TODO: see if any special processing must happen
+func (gc *gossipChannel) createApprovalMessageResponse(pkiId []byte) *proto.GossipMessage {
+	return &proto.GossipMessage{
+		Channel: gc.chainID,
+		Tag:     proto.GossipMessage_APPROVAL,
+		Nonce:   0,
+		Content: &proto.GossipMessage_ApprovalResponse{
+			ApprovalResponse: &proto.ApprovalMessageResponse{
+				PkiId:        pkiId,
+				ApprovalHash: []byte{0},
 			},
 		},
 	}

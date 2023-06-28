@@ -151,6 +151,27 @@ func (pit PeerIdentityType) String() string {
 	return string(rawJSON)
 }
 
+func (pit PeerIdentityType) ExtractMSPID() string {
+	base64Representation := base64.StdEncoding.EncodeToString(pit)
+	sID := &msp.SerializedIdentity{}
+	err := proto.Unmarshal(pit, sID)
+	if err != nil {
+		return fmt.Sprintf("non SerializedIdentity: %s", base64Representation)
+	}
+
+	bl, _ := pem.Decode(sID.IdBytes)
+	if bl == nil {
+		return fmt.Sprintf("non PEM encoded identity: %s", base64Representation)
+	}
+
+	cert, _ := x509.ParseCertificate(bl.Bytes)
+	if cert == nil {
+		return fmt.Sprintf("non x509 identity: %s", base64Representation)
+	}
+
+	return sID.GetMspid()
+}
+
 // PeerSuspector returns whether a peer with a given identity is suspected
 // as being revoked, or its CA is revoked
 type PeerSuspector func(identity PeerIdentityType) bool

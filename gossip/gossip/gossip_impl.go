@@ -68,34 +68,39 @@ type Node struct {
 	gossipMetrics     *metrics.GossipMetrics
 }
 
-func (g *Node) BlockCommitted() {
-	g.logger.Debug("ALF: BlockCommitted called")
-	// Generate random nonce from a random number
-	nonce := uint64(11111111111111111111)
-	g.logger.Debugf("ALF: BlockCommitted nonce: %d", nonce)
-	// Packages the block into pg.GossipMessage
+func (g *Node) OnBlockCommitted(blockHash []byte) {
+	g.logger.Debug("BLOCC: OnBlockCommitted called")
+	defer g.logger.Debug("BLOCC: OnBlockCommitted finished")
+
+	// TODO: One should check 1. if the peer exists; 2. if the peer is in the channel,
+	// 3. if the peer is online, and lastly that this peer is the one specified by
+	// channelLeader policy
+	if g.selfIdentity.ExtractMSPID() != "Org1MSP" {
+		g.logger.Debug("BLOCC: Not Org1MSP, returning")
+		return
+	}
+
+	// TODO: this is hardcoded for the channel mychannel, need to be general in future
 	gossipMsg := &pg.GossipMessage{
 		Channel: []byte(common.ChannelID("mychannel")),
-		Nonce:   nonce,
+		Nonce:   util.RandomUInt64(),
 		Tag:     pg.GossipMessage_APPROVAL,
-		// TODO: use appropriate msg type
-		//Content: &pg.GossipMessage_MemReq{
-		//	MemReq: &pg.MembershipRequest{},
-		//},
-		Content: &pg.GossipMessage_ApprovalMessage{
-			ApprovalMessage: &pg.ApprovalMessage{},
+		Content: &pg.GossipMessage_ApprovalRequest{
+			ApprovalRequest: &pg.ApprovalMessageRequest{
+				PkiId:        g.comm.GetPKIid(),
+				Channel_MAC:  channel.GenerateMAC(g.comm.GetPKIid(), common.ChannelID("mychannel")),
+				ApprovalHash: blockHash,
+			},
 		},
 	}
-	// check if channel mychannel exists
+
+	g.logger.Debug("BLOCC: Printing the gossip message:", gossipMsg.GetApprovalRequest())
+
 	gossipChan := g.chanState.getGossipChannelByChainID(common.ChannelID("mychannel"))
-	g.logger.Debug("ALF: BlockCommitted gossipChan: ", gossipChan)
-	// If the channel exists, then send the gossip message
-	// to the peers in the channel
 	if gossipChan != nil {
-		g.logger.Debug("ALF: Gossiping the message")
+		g.logger.Debug("BLOCC: Gossiping the message")
 		g.Gossip(gossipMsg)
 	}
-	g.logger.Debug("ALF: BlockCommitted finished")
 }
 
 // New creates a gossip instance attached to a gRPC server
@@ -378,14 +383,14 @@ func (g *Node) handleMessage(m protoext.ReceivedMessage) {
 	}
 
 	tag := msg.GetTag()
-	g.logger.Debug("ALF: Message tag: ", tag)
+	g.logger.Debug("BLOCC: Message tag: ", tag)
 	if tag == pg.GossipMessage_APPROVAL {
-		g.logger.Debug("ALF: Received an approval message")
+		g.logger.Debug("BLOCC: Received an approval message")
 	}
-	g.logger.Debug("ALF: ", msg.GetContent())
+	g.logger.Debug("BLOCC: ", msg.GetContent())
 
 	if protoext.IsChannelRestricted(msg.GossipMessage) {
-		g.logger.Debug("ALF: Channel: ", g.chanState.lookupChannelForMsg(m), " is restricted")
+		g.logger.Debug("BLOCC: Channel: ", g.chanState.lookupChannelForMsg(m), " is restricted")
 		if gc := g.chanState.lookupChannelForMsg(m); gc == nil {
 			// If we're not in the channel, we should still forward to peers of our org
 			// in case it's a StateInfo message
@@ -516,8 +521,8 @@ func (g *Node) gossipBatch(msgs []*emittedGossipMessage) {
 	}
 
 	// Gossip empty messages
-	approvalMsgs, msgs := partitionMessages(isApproval, msgs)
-	g.gossipInChan(approvalMsgs, func(gc channel.GossipChannel) filter.RoutingFilter {
+	approvals, msgs := partitionMessages(isApproval, msgs)
+	g.gossipInChan(approvals, func(gc channel.GossipChannel) filter.RoutingFilter {
 		// TODO: play with these filters
 		return filter.CombineRoutingFilters()
 	})
@@ -633,7 +638,7 @@ func (g *Node) gossipInChan(messages []*emittedGossipMessage, chanRoutingFactory
 
 		// Send the messages to the remote peers
 		for _, msg := range messagesOfChannel {
-			g.logger.Debug("ALF: sending message with tag: ", msg.GetTag())
+			g.logger.Debug("BLOCC: sending message with tag: ", msg.GetTag())
 			filteredPeers := g.removeSelfLoop(msg, peers2Send)
 			g.comm.Send(msg.SignedGossipMessage, filteredPeers...)
 		}
@@ -703,7 +708,8 @@ func (g *Node) SendByCriteria(msg *protoext.SignedGossipMessage, criteria SendCr
 func (g *Node) Gossip(msg *pg.GossipMessage) {
 	// Educate developers to Gossip messages with the right tags.
 	// See IsTagLegal() for wanted behavior.
-	g.logger.Debugf("ALF: Gossiping msg: %s", msg.GetTag())
+	g.logger.Debugf("BLOCC: Gossiping msg: %s", msg.GetTag())
+	g.logger.Debug("BLOCC: Gossiping msg: ", msg.String())
 	if err := protoext.IsTagLegal(msg); err != nil {
 		panic(errors.WithStack(err))
 	}

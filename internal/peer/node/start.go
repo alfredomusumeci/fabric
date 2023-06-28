@@ -466,7 +466,7 @@ func serve(args []string) error {
 		logger.Fatalf("Failed to create peer server (%s)", err)
 	}
 
-	logger.Debug("ALF: initializing gossip service")
+	logger.Debug("BLOCC: initializing gossip service")
 	// FIXME: Creating the gossip service has the side effect of starting a bunch
 	// of go routines and registration with the grpc server.
 	gossipService, err := initGossipService(

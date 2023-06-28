@@ -271,7 +271,7 @@ func ValidateTransaction(e *common.Envelope, cryptoProvider bccsp.BCCSP) (*commo
 	}
 
 	// validate the signature in the envelope
-	// ALF: TODO: this is a temporary hack to see if the empty block commit works
+	// BLOCC: TODO: this is a temporary hack to see if the empty block commit works
 	if chdr.Type != int32(common.HeaderType_PEER_SIGNATURE_TX) {
 		err = checkSignatureFromCreator(shdr.Creator, e.Signature, e.Payload, chdr.ChannelId, cryptoProvider)
 		if err != nil {

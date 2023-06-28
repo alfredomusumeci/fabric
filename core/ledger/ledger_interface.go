@@ -45,8 +45,8 @@ type Initializer struct {
 // that a block has been committed. This is used to trigger the gossip layer to broadcast
 // the block to peers. See its implementation in gossip_service.go
 type GossipBlockCommitter interface {
-	// BlockCommitted Gossips block after being committed
-	BlockCommitted()
+	// OnBlockCommitted Gossips block after being committed
+	OnBlockCommitted(blockHash []byte)
 }
 
 // Config is a structure used to configure a ledger provider.

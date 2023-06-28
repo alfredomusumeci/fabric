@@ -92,13 +92,13 @@ func (m *ChannelDeMultiplexer) DeMultiplex(msg interface{}) {
 		return
 	}
 	channels := m.channels
-	logger.Debug("ALF: DeMultiplexing message", msg, "to", len(channels), "channels")
-	logger.Debug("ALF: Channels are", channels)
+	logger.Debug("BLOCC: DeMultiplexing message", msg, "to", len(channels), "channels")
+	logger.Debug("BLOCC: Channels are", channels)
 	m.deMuxInProgress.Add(1)
 	m.lock.Unlock()
 
 	for _, ch := range channels {
-		logger.Debug("ALF: Checking channel", ch, "for message", msg)
+		logger.Debug("BLOCC: Checking channel", ch, "for message", msg)
 		if ch.pred(msg) {
 			select {
 			case <-m.stopCh:

@@ -107,16 +107,16 @@ type gossipSvc interface {
 	// Stop stops the gossip component
 	Stop()
 
-	// BlockCommitted Gossips block after being committed
-	BlockCommitted()
+	// OnBlockCommitted Gossips block after being committed
+	OnBlockCommitted(blockHash []byte)
 }
 
 // GossipBlockCommitter is an interface that allows the ledger to notify the gossip layer
 // that a block has been committed. This is used to trigger the gossip layer to broadcast
 // the block to peers.
 type GossipBlockCommitter interface {
-	// BlockCommitted Gossips block after being committed
-	BlockCommitted()
+	// OnBlockCommitted Gossips block after being committed
+	OnBlockCommitted(blockHash []byte)
 }
 
 // GossipBlockCommitterImpl Implementation of GossipBlockCommitter
@@ -124,9 +124,9 @@ type GossipBlockCommitterImpl struct {
 	GossipSvc gossipSvc
 }
 
-func (g GossipBlockCommitterImpl) BlockCommitted() {
-	logger.Debug("ALF: now inside blockCommitted in gossip_service.go")
-	g.GossipSvc.BlockCommitted()
+func (g GossipBlockCommitterImpl) OnBlockCommitted(blockHash []byte) {
+	logger.Debug("BLOCC: now inside blockCommitted in gossip_service.go")
+	g.GossipSvc.OnBlockCommitted(nil)
 }
 
 // GossipServiceAdapter serves to provide basic functionality

@@ -49,10 +49,21 @@ func IsRemoteStateMessage(m *gossip.GossipMessage) bool {
 	return m.GetStateRequest() != nil || m.GetStateResponse() != nil
 }
 
-// IsApprovalMsg returns whether this GossipMessage is a message signifying that the channel leader
-// has signed and published a sensory transaction
+// IsApprovalRequestMsg returns whether this GossipMessage is a message signifying that the channel leader
+// has signed and published a sensory transaction. It is asking for approval from the peers.
+func IsApprovalRequestMsg(m *gossip.GossipMessage) bool {
+	return m.GetApprovalRequest() != nil
+}
+
+// IsApprovalResponseMsg returns whether this GossipMessage is a message signifying that the peer has
+// approved the sensory transaction.
+func IsApprovalResponseMsg(m *gossip.GossipMessage) bool {
+	return m.GetApprovalResponse() != nil
+}
+
+// IsApprovalMsg returns whether this GossipMessage is an approval message
 func IsApprovalMsg(m *gossip.GossipMessage) bool {
-	return m.GetApprovalMessage() != nil
+	return IsApprovalRequestMsg(m) || IsApprovalResponseMsg(m)
 }
 
 // GetPullMsgType returns the phase of the pull mechanism this GossipMessage belongs to

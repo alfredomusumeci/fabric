@@ -601,6 +601,17 @@ func (l *kvLedger) NewHistoryQueryExecutor() (ledger.HistoryQueryExecutor, error
 	return nil, nil
 }
 
+type txEndorsementCheckRequest struct {
+	data []byte
+	txId int
+}
+
+type txEndorsementCheckResult struct {
+	txId          int
+	isEndorsement bool
+	err           error
+}
+
 // CommitLegacy commits the block and the corresponding pvt data in an atomic operation.
 // It synchronizes commit, snapshot generation and snapshot requests via events and commitProceed channels.
 // Before committing a block, it sends a commitStart event and waits for a message from commitProceed.
@@ -615,18 +626,124 @@ func (l *kvLedger) CommitLegacy(pvtdataAndBlock *ledger.BlockAndPvtData, commitO
 		return err
 	}
 
-	// We know that the block has been committed here
-	logger.Debug("ALF: Checking if blockCommitter is a valid object... ", l.blockCommitter)
-	//TODO: Find a better way to check against != nil given that blockCommitter is an interface
-	//if bc, ok := l.blockCommitter.(service.GossipBlockCommitterImpl); ok && bc != nil {
-	if l.blockCommitter != nil {
-		logger.Debug("ALF: Telling blockCommitter...")
-		l.blockCommitter.BlockCommitted()
-		logger.Debug("ALF: Told blockCommitter")
+	blk := pvtdataAndBlock.Block
+	results := make(chan *txEndorsementCheckResult, len(blk.Data.Data)) // buffer the channel to prevent goroutines from blocking
+
+	var wg sync.WaitGroup
+	for txId, d := range blk.Data.Data {
+		wg.Add(1) // increment the WaitGroup counter
+		go func(index int, data []byte) {
+			defer wg.Done() // decrement the WaitGroup counter when the goroutine finishes
+			l.checkIfEndorsementTx(&txEndorsementCheckRequest{data, index}, results)
+		}(txId, d)
+	}
+
+	// Wait for all goroutines to finish
+	go func() {
+		wg.Wait()
+		close(results) // close the results channel after all goroutines are done
+	}()
+
+	var isEndorsementTx bool
+	for result := range results {
+		if result.isEndorsement {
+			logger.Debugf("Tx %d is an endorsement tx", result.txId)
+			isEndorsementTx = true
+		}
+	}
+
+	if isEndorsementTx {
+		// TODO: this should isolate the single tx instead of the block. Will work though on the assumption
+		// that every block is only made of one tx
+		logger.Debug("BLOCC: Checking if blockCommitter is a valid object... ", l.blockCommitter)
+		//TODO: Find a better way to check against != nil given that blockCommitter is an interface
+		//if bc, ok := l.blockCommitter.(service.GossipBlockCommitterImpl); ok && bc != nil {
+		if l.blockCommitter != nil {
+			logger.Debug("BLOCC: Telling blockCommitter...")
+			blockHash := protoutil.BlockHeaderHash(blk.Header)
+			l.blockCommitter.OnBlockCommitted(blockHash)
+			logger.Debug("BLOCC: Told blockCommitter")
+		}
 	}
 
 	l.snapshotMgr.events <- &event{commitDone, blockNumber}
 	return nil
+}
+
+// TODO: for now this is general endorsement, later set to a specific chaincode
+// TODO: Also check if I should implement results chan<- *blockValidationResult kind of style (validator.go)
+func (l *kvLedger) checkIfEndorsementTx(req *txEndorsementCheckRequest, results chan<- *txEndorsementCheckResult) {
+	data := req.data
+	txId := req.txId
+
+	if data == nil {
+		results <- &txEndorsementCheckResult{
+			txId:          txId,
+			isEndorsement: false,
+			err:           errors.New("BLOCC: data is nil"),
+		}
+		return
+	}
+
+	if env, err := protoutil.GetEnvelopeFromBlock(data); err != nil {
+		logger.Warningf("Error getting envelope from block: %+v", err)
+		results <- &txEndorsementCheckResult{
+			txId:          txId,
+			isEndorsement: false,
+			err:           err,
+		}
+		return
+	} else if env != nil {
+		logger.Debug("BLOCC: Envelope is not nil")
+		var payload *common.Payload
+
+		if payload, err = protoutil.UnmarshalPayload(env.Payload); err != nil {
+			logger.Warningf("Error getting payload from envelope: %+v", err)
+			results <- &txEndorsementCheckResult{
+				txId:          txId,
+				isEndorsement: false,
+				err:           err,
+			}
+			return
+		}
+
+		chdr, err := protoutil.UnmarshalChannelHeader(payload.Header.ChannelHeader)
+		if err != nil {
+			logger.Warningf("Could not unmarshal channel header, err %s, skipping", err)
+			results <- &txEndorsementCheckResult{
+				txId:          txId,
+				isEndorsement: false,
+				err:           err,
+			}
+			return
+		}
+
+		if common.HeaderType(chdr.Type) == common.HeaderType_ENDORSER_TRANSACTION {
+			logger.Debug("BLOCC: Header type is ENDORSER_TRANSACTION")
+			results <- &txEndorsementCheckResult{
+				txId:          txId,
+				isEndorsement: true,
+				err:           nil,
+			}
+			return
+		} else {
+			logger.Debug("BLOCC: Header type is not ENDORSER_TRANSACTION")
+			results <- &txEndorsementCheckResult{
+				txId:          txId,
+				isEndorsement: false,
+				err:           nil,
+			}
+			return
+		}
+	} else {
+		logger.Warning("BLOCC: Envelope is nil")
+		results <- &txEndorsementCheckResult{
+			txId:          txId,
+			isEndorsement: false,
+			err:           errors.New("BLOCC: Envelope is nil"),
+		}
+		return
+	}
 }
 
 // commit commits the block and the corresponding pvt data in an atomic operation.

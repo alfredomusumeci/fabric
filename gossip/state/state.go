@@ -8,6 +8,8 @@ package state
 
 import (
 	"bytes"
+	"github.com/hyperledger/fabric-protos-go/msp"
+	util2 "github.com/hyperledger/fabric/common/util"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -189,9 +191,27 @@ func NewGossipStateProvider(
 	blockingMode bool,
 	config *StateConfig,
 ) GossipStateProvider {
+	logger.Debug("Listening to all messages")
+	allMsgChan, _ := services.Accept(func(message interface{}) bool {
+		return true
+	}, false)
+
+	defer logger.Debug("Listening to all messages done")
+	go func() {
+		for msg := range allMsgChan {
+			logger.Debug("Received message: ", msg)
+		}
+	}()
+
 	gossipChan, _ := services.Accept(func(message interface{}) bool {
 		// Get only data messages
 		return protoext.IsDataMsg(message.(*proto.GossipMessage)) &&
+			bytes.Equal(message.(*proto.GossipMessage).Channel, []byte(chainID))
+	}, false)
+
+	gossipChanApproval, _ := services.Accept(func(message interface{}) bool {
+		// Get only data messages
+		return protoext.IsApprovalResponseMsg(message.(*proto.GossipMessage)) &&
 			bytes.Equal(message.(*proto.GossipMessage).Channel, []byte(chainID))
 	}, false)
 
@@ -261,6 +281,7 @@ func NewGossipStateProvider(
 	services.UpdateLedgerHeight(height, common2.ChannelID(s.chainID))
 
 	// Listen for incoming communication
+	go s.receiveAndCommitApprovalMessages(gossipChanApproval)
 	go s.receiveAndQueueGossipMessages(gossipChan)
 	go s.receiveAndDispatchDirectMessages(commChan)
 	// Deliver in order messages into the incoming channel
@@ -273,6 +294,67 @@ func NewGossipStateProvider(
 	go s.processStateRequests()
 
 	return s
+}
+
+// TODO: if I use for loop this stops working - check why
+func (s *GossipStateProviderImpl) receiveAndCommitApprovalMessages(ch <-chan *proto.GossipMessage) {
+	s.logger.Debug("BLOCC: Starting to receive approval blocks")
+	s.logger.Debug("BLOCC:", ch)
+	for msg := range ch {
+		s.logger.Debug("BLOCC: Adding an approval block")
+		go func(msg *proto.GossipMessage) {
+			emptyBlock := &common.Block{
+				Header: &common.BlockHeader{
+					Number: s.maxAvailableLedgerHeight() + 1,
+				},
+				Data: &common.BlockData{
+					Data: [][]byte{},
+				},
+				Metadata: &common.BlockMetadata{
+					Metadata: [][]byte{},
+				},
+			}
+
+			//Dummy TX for the moment being
+			creator := protoutil.MarshalOrPanic(&msp.SerializedIdentity{
+				Mspid:   "OrgDummyTest",
+				IdBytes: []byte("creator"),
+			})
+			nonce := make([]byte, 24)
+			txid := protoutil.ComputeTxID(creator, nonce)
+
+			emptyBlock.Data = &common.BlockData{
+				Data: [][]byte{
+					protoutil.MarshalOrPanic(&common.Envelope{
+						Payload: protoutil.MarshalOrPanic(&common.Payload{
+							Header: &common.Header{
+								ChannelHeader: protoutil.MarshalOrPanic(&common.ChannelHeader{
+									Type:      int32(common.HeaderType_PEER_SIGNATURE_TX),
+									TxId:      txid,
+									ChannelId: s.chainID,
+									Timestamp: util2.CreateUtcTimestamp(),
+								}),
+								// Make sure to create a nonce and creator appropriately, otherwise will fail in validation
+								SignatureHeader: protoutil.MarshalOrPanic(&common.SignatureHeader{
+									Creator: creator,
+									Nonce:   nonce,
+								}),
+							},
+							Data: []byte{'d', 'u', 'm', 'm', 'y'},
+						}),
+						Signature: []byte("signature"),
+					}),
+				},
+			}
+
+			// Commit empty block
+			if err := s.commitBlock(emptyBlock, nil); err != nil {
+				s.logger.Errorf("Empty block: got error while committing(%+v)", errors.WithStack(err))
+			}
+		}(msg)
+
+		s.logger.Debug("BLOCC: Done adding an approval block")
+	}
 }
 
 func (s *GossipStateProviderImpl) receiveAndQueueGossipMessages(ch <-chan *proto.GossipMessage) {
@@ -792,10 +874,10 @@ func (s *GossipStateProviderImpl) commitBlock(block *common.Block, pvtData util.
 	t1 := time.Now()
 
 	//// TODO: Temporarily skipping the problem of updating the ledger height appropriately
-	//height, _ := s.ledger.LedgerHeight()
-	//if block.Header.Number < height {
-	//	block.Header.Number = height
-	//}
+	height, _ := s.ledger.LedgerHeight()
+	if block.Header.Number < height {
+		block.Header.Number = height
+	}
 
 	// Commit block with available private transactions
 	if err := s.ledger.StoreBlock(block, pvtData); err != nil {
@@ -812,62 +894,6 @@ func (s *GossipStateProviderImpl) commitBlock(block *common.Block, pvtData util.
 		s.chainID, block.Header.Number, len(block.Data.Data))
 
 	s.stateMetrics.Height.With("channel", s.chainID).Set(float64(block.Header.Number + 1))
-	///////////////////////
-	//s.logger.Debugf("Adding empty block")
-	//
-	//// Create empty block
-	//emptyBlock := &common.Block{
-	//	Header: &common.BlockHeader{
-	//		Number: block.Header.Number + 1,
-	//	},
-	//	Data: &common.BlockData{
-	//		Data: [][]byte{},
-	//	},
-	//	Metadata: &common.BlockMetadata{
-	//		Metadata: [][]byte{},
-	//	},
-	//}
-
-	// Dummy TX for the moment being
-	//creator := protoutil.MarshalOrPanic(&msp.SerializedIdentity{
-	//	Mspid:   "OrgDummyTest",
-	//	IdBytes: []byte("creator"),
-	//})
-	//nonce := make([]byte, 24)
-	//txid := protoutil.ComputeTxID(creator, nonce)
-	//
-	//emptyBlock.Data = &common.BlockData{
-	//	Data: [][]byte{
-	//		protoutil.MarshalOrPanic(&common.Envelope{
-	//			Payload: protoutil.MarshalOrPanic(&common.Payload{
-	//				Header: &common.Header{
-	//					ChannelHeader: protoutil.MarshalOrPanic(&common.ChannelHeader{
-	//						Type:      int32(common.HeaderType_PEER_SIGNATURE_TX),
-	//						TxId:      txid,
-	//						ChannelId: s.chainID,
-	//						Timestamp: util2.CreateUtcTimestamp(),
-	//					}),
-	//					// Make sure to create a nonce and creator appropriately, otherwise will fail in validation
-	//					SignatureHeader: protoutil.MarshalOrPanic(&common.SignatureHeader{
-	//						Creator: creator,
-	//						Nonce:   nonce,
-	//					}),
-	//				},
-	//				Data: []byte{'d', 'u', 'm', 'm', 'y'},
-	//			}),
-	//			Signature: []byte("signature"),
-	//		}),
-	//	},
-	//}
-	//
-	//// Commit empty block
-	//if err := s.ledger.StoreBlock(emptyBlock, nil); err != nil {
-	//	s.logger.Errorf("Empty block: got error while committing(%+v)", errors.WithStack(err))
-	//	return err
-	//}
-	//
-	//s.logger.Debugf("Empty block committed")
-	///////////////////////
 	return nil
 }
 
