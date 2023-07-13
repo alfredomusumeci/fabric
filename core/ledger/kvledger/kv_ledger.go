@@ -601,15 +601,23 @@ func (l *kvLedger) NewHistoryQueryExecutor() (ledger.HistoryQueryExecutor, error
 	return nil, nil
 }
 
-type txEndorsementCheckRequest struct {
+type txSensoryEndorsementCheckRequest struct {
 	data []byte
 	txId int
 }
 
-type txEndorsementCheckResult struct {
-	txId          int
-	isEndorsement bool
-	err           error
+type txSensoryEndorsementCheckResult struct {
+	txId                   int
+	isSensoryEndorsementTx bool
+	err                    error
+}
+
+func createSensoryCheckResult(txId int, isSensoryEndorsementTx bool, err error) *txSensoryEndorsementCheckResult {
+	return &txSensoryEndorsementCheckResult{
+		txId:                   txId,
+		isSensoryEndorsementTx: isSensoryEndorsementTx,
+		err:                    err,
+	}
 }
 
 // CommitLegacy commits the block and the corresponding pvt data in an atomic operation.
@@ -626,15 +634,22 @@ func (l *kvLedger) CommitLegacy(pvtdataAndBlock *ledger.BlockAndPvtData, commitO
 		return err
 	}
 
+	l.gossipIfSensoryTx(pvtdataAndBlock)
+
+	l.snapshotMgr.events <- &event{commitDone, blockNumber}
+	return nil
+}
+
+func (l *kvLedger) gossipIfSensoryTx(pvtdataAndBlock *ledger.BlockAndPvtData) {
 	blk := pvtdataAndBlock.Block
-	results := make(chan *txEndorsementCheckResult, len(blk.Data.Data)) // buffer the channel to prevent goroutines from blocking
+	results := make(chan *txSensoryEndorsementCheckResult, len(blk.Data.Data)) // buffer the channel to prevent goroutines from blocking
 
 	var wg sync.WaitGroup
 	for txId, d := range blk.Data.Data {
 		wg.Add(1) // increment the WaitGroup counter
 		go func(index int, data []byte) {
 			defer wg.Done() // decrement the WaitGroup counter when the goroutine finishes
-			l.checkIfEndorsementTx(&txEndorsementCheckRequest{data, index}, results)
+			l.checkIfSensoryTx(&txSensoryEndorsementCheckRequest{data, index}, results)
 		}(txId, d)
 	}
 
@@ -644,15 +659,16 @@ func (l *kvLedger) CommitLegacy(pvtdataAndBlock *ledger.BlockAndPvtData, commitO
 		close(results) // close the results channel after all goroutines are done
 	}()
 
-	var isEndorsementTx bool
+	var isSensoryTx bool
 	for result := range results {
-		if result.isEndorsement {
+		if result.isSensoryEndorsementTx {
 			logger.Debugf("Tx %d is an endorsement tx", result.txId)
-			isEndorsementTx = true
+			isSensoryTx = true
 		}
 	}
 
-	if isEndorsementTx {
+	//isEndorsementTx = true
+	if isSensoryTx {
 		// TODO: this should isolate the single tx instead of the block. Will work though on the assumption
 		// that every block is only made of one tx
 		logger.Debug("BLOCC: Checking if blockCommitter is a valid object... ", l.blockCommitter)
@@ -665,85 +681,193 @@ func (l *kvLedger) CommitLegacy(pvtdataAndBlock *ledger.BlockAndPvtData, commitO
 			logger.Debug("BLOCC: Told blockCommitter")
 		}
 	}
-
-	l.snapshotMgr.events <- &event{commitDone, blockNumber}
-	return nil
 }
 
-// TODO: for now this is general endorsement, later set to a specific chaincode
-// TODO: Also check if I should implement results chan<- *blockValidationResult kind of style (validator.go)
-func (l *kvLedger) checkIfEndorsementTx(req *txEndorsementCheckRequest, results chan<- *txEndorsementCheckResult) {
+//// TODO: for now this is general endorsement, later set to a specific chaincode
+//func (l *kvLedger) checkIfSensoryTx(req *txSensoryEndorsementCheckRequest, results chan<- *txSensoryEndorsementCheckResult) {
+//	data := req.data
+//	txId := req.txId
+//
+//	if data == nil {
+//		results <- createSensoryCheckResult(txId, false, errors.New("BLOCC: data is nil"))
+//		return
+//	}
+//
+//	if env, err := protoutil.GetEnvelopeFromBlock(data); err != nil {
+//		logger.Warningf("Error getting envelope from block: %+v", err)
+//		results <- createSensoryCheckResult(txId, false, err)
+//		return
+//	} else if env != nil {
+//		logger.Debug("BLOCC: Envelope is not nil")
+//		var payload *common.Payload
+//
+//		if payload, err = protoutil.UnmarshalPayload(env.Payload); err != nil {
+//			logger.Warningf("Error getting payload from envelope: %+v", err)
+//			results <- createSensoryCheckResult(txId, false, err)
+//			return
+//		}
+//
+//		chdr, err := protoutil.UnmarshalChannelHeader(payload.Header.ChannelHeader)
+//		if err != nil {
+//			logger.Warningf("Could not unmarshal channel header, err %s, skipping", err)
+//			results <- createSensoryCheckResult(txId, false, err)
+//			return
+//		}
+//
+//		if common.HeaderType(chdr.Type) == common.HeaderType_ENDORSER_TRANSACTION {
+//			logger.Debug("BLOCC: Header type is ENDORSER_TRANSACTION")
+//
+//			// Transaction
+//			tx, err := protoutil.UnmarshalTransaction(payload.Data)
+//			if err != nil {
+//				logger.Warningf("Could not unmarshal transaction, err %s, skipping", err)
+//				results <- createSensoryCheckResult(txId, false, err)
+//				return
+//			}
+//
+//			// ChaincodeActionPayload
+//			chaincodeActionPayload, err := protoutil.UnmarshalChaincodeActionPayload(tx.Actions[0].Payload)
+//			if err != nil {
+//				logger.Warningf("Could not unmarshal chaincode action payload, err %s, skipping", err)
+//				results <- createSensoryCheckResult(txId, false, err)
+//				return
+//			}
+//
+//			// ChaincodeProposalPayload
+//			cpp, err := protoutil.UnmarshalChaincodeProposalPayload(chaincodeActionPayload.ChaincodeProposalPayload)
+//			if err != nil {
+//				logger.Warningf("Could not unmarshal chaincode proposal payload, err %s, skipping", err)
+//				results <- createSensoryCheckResult(txId, false, err)
+//				return
+//			}
+//
+//			// ChaincodeInvocationSpec
+//			cis := &peer.ChaincodeInvocationSpec{}
+//			err = proto.Unmarshal(cpp.Input, cis)
+//			if err != nil {
+//				logger.Warningf("Could not unmarshal chaincode invocation spec, err %s, skipping", err)
+//				results <- createSensoryCheckResult(txId, false, err)
+//			}
+//
+//			ccName := cis.ChaincodeSpec.ChaincodeId.Name
+//			if ccName == "sensor_chaincode" {
+//				logger.Debug("BLOCC: Chaincode name is sensor_chaincode")
+//			} else {
+//				logger.Debug("BLOCC: Chaincode name is not sensor_chaincode")
+//				results <- createSensoryCheckResult(txId, true, nil)
+//				return
+//			}
+//		} else {
+//			logger.Debug("BLOCC: Header type is not ENDORSER_TRANSACTION")
+//			results <- createSensoryCheckResult(txId, false, nil)
+//			return
+//		}
+//	} else {
+//		logger.Warning("BLOCC: Envelope is nil")
+//		results <- createSensoryCheckResult(txId, false, errors.New("BLOCC: envelope is nil"))
+//		return
+//	}
+//}
+
+// checkIfEndorsementTx checks if the transaction is an endorsement transaction
+func (l *kvLedger) checkIfEndorsementTx(req *txSensoryEndorsementCheckRequest) (*common.Payload, error) {
 	data := req.data
-	txId := req.txId
 
 	if data == nil {
-		results <- &txEndorsementCheckResult{
-			txId:          txId,
-			isEndorsement: false,
-			err:           errors.New("BLOCC: data is nil"),
-		}
-		return
+		return nil, errors.New("BLOCC: data is nil")
 	}
 
-	if env, err := protoutil.GetEnvelopeFromBlock(data); err != nil {
+	env, err := protoutil.GetEnvelopeFromBlock(data)
+	if err != nil {
 		logger.Warningf("Error getting envelope from block: %+v", err)
-		results <- &txEndorsementCheckResult{
-			txId:          txId,
-			isEndorsement: false,
-			err:           err,
-		}
-		return
-	} else if env != nil {
-		logger.Debug("BLOCC: Envelope is not nil")
-		var payload *common.Payload
+		return nil, err
+	}
 
-		if payload, err = protoutil.UnmarshalPayload(env.Payload); err != nil {
-			logger.Warningf("Error getting payload from envelope: %+v", err)
-			results <- &txEndorsementCheckResult{
-				txId:          txId,
-				isEndorsement: false,
-				err:           err,
-			}
-			return
-		}
-
-		chdr, err := protoutil.UnmarshalChannelHeader(payload.Header.ChannelHeader)
-		if err != nil {
-			logger.Warningf("Could not unmarshal channel header, err %s, skipping", err)
-			results <- &txEndorsementCheckResult{
-				txId:          txId,
-				isEndorsement: false,
-				err:           err,
-			}
-			return
-		}
-
-		if common.HeaderType(chdr.Type) == common.HeaderType_ENDORSER_TRANSACTION {
-			logger.Debug("BLOCC: Header type is ENDORSER_TRANSACTION")
-			results <- &txEndorsementCheckResult{
-				txId:          txId,
-				isEndorsement: true,
-				err:           nil,
-			}
-			return
-		} else {
-			logger.Debug("BLOCC: Header type is not ENDORSER_TRANSACTION")
-			results <- &txEndorsementCheckResult{
-				txId:          txId,
-				isEndorsement: false,
-				err:           nil,
-			}
-			return
-		}
-	} else {
+	if env == nil {
 		logger.Warning("BLOCC: Envelope is nil")
-		results <- &txEndorsementCheckResult{
-			txId:          txId,
-			isEndorsement: false,
-			err:           errors.New("BLOCC: Envelope is nil"),
-		}
+		return nil, errors.New("BLOCC: Envelope is nil")
+	}
+
+	logger.Debug("BLOCC: Envelope is not nil")
+
+	payload, err := protoutil.UnmarshalPayload(env.Payload)
+	if err != nil {
+		logger.Warningf("Error getting payload from envelope: %+v", err)
+		return nil, err
+	}
+
+	chdr, err := protoutil.UnmarshalChannelHeader(payload.Header.ChannelHeader)
+	if err != nil {
+		logger.Warningf("Could not unmarshal channel header, err %s, skipping", err)
+		return nil, err
+	}
+
+	if common.HeaderType(chdr.Type) != common.HeaderType_ENDORSER_TRANSACTION {
+		logger.Debug("BLOCC: Header type is not ENDORSER_TRANSACTION")
+		return nil, nil
+	}
+
+	logger.Debug("BLOCC: Header type is ENDORSER_TRANSACTION")
+
+	return payload, nil
+}
+
+// checkIfSensoryChaincode function checks if the payload is from sensory chaincode.
+func (l *kvLedger) checkIfSensoryChaincode(txId int, payload *common.Payload, results chan<- *txSensoryEndorsementCheckResult) {
+	// Transaction
+	tx, err := protoutil.UnmarshalTransaction(payload.Data)
+	if err != nil {
+		logger.Warningf("Could not unmarshal transaction, err %s, skipping", err)
+		results <- createSensoryCheckResult(txId, false, err)
 		return
 	}
+
+	// ChaincodeActionPayload
+	chaincodeActionPayload, err := protoutil.UnmarshalChaincodeActionPayload(tx.Actions[0].Payload)
+	if err != nil {
+		logger.Warningf("Could not unmarshal chaincode action payload, err %s, skipping", err)
+		results <- createSensoryCheckResult(txId, false, err)
+		return
+	}
+
+	// ChaincodeProposalPayload
+	cpp, err := protoutil.UnmarshalChaincodeProposalPayload(chaincodeActionPayload.ChaincodeProposalPayload)
+	if err != nil {
+		logger.Warningf("Could not unmarshal chaincode proposal payload, err %s, skipping", err)
+		results <- createSensoryCheckResult(txId, false, err)
+		return
+	}
+
+	// ChaincodeInvocationSpec
+	cis := &peer.ChaincodeInvocationSpec{}
+	err = proto.Unmarshal(cpp.Input, cis)
+	if err != nil {
+		logger.Warningf("Could not unmarshal chaincode invocation spec, err %s, skipping", err)
+		results <- createSensoryCheckResult(txId, false, err)
+		return
+	}
+
+	ccName := cis.ChaincodeSpec.ChaincodeId.Name
+	if ccName == "sensor_chaincode" {
+		logger.Debug("BLOCC: Chaincode name is sensor_chaincode")
+		results <- createSensoryCheckResult(txId, true, nil)
+	} else {
+		logger.Debug("BLOCC: Chaincode name is not sensor_chaincode")
+		results <- createSensoryCheckResult(txId, false, nil)
+	}
+}
+
+// checkIfSensoryTx checks if the transaction is from sensory chaincode.
+func (l *kvLedger) checkIfSensoryTx(req *txSensoryEndorsementCheckRequest, results chan<- *txSensoryEndorsementCheckResult) {
+	txId := req.txId
+
+	payload, err := l.checkIfEndorsementTx(req)
+	if err != nil || payload == nil {
+		results <- createSensoryCheckResult(txId, false, err)
+		return
+	}
+
+	l.checkIfSensoryChaincode(txId, payload, results)
 }
 
 // commit commits the block and the corresponding pvt data in an atomic operation.

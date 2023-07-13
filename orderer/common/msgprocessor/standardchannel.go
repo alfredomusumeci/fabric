@@ -11,7 +11,6 @@ import (
 	"github.com/hyperledger/fabric-protos-go/orderer"
 	"github.com/hyperledger/fabric/bccsp"
 	"github.com/hyperledger/fabric/common/channelconfig"
-	"github.com/hyperledger/fabric/common/policies"
 	"github.com/hyperledger/fabric/internal/pkg/identity"
 	"github.com/hyperledger/fabric/protoutil"
 
@@ -67,7 +66,8 @@ func CreateStandardChannelFilters(filterSupport channelconfig.Resources, config 
 	rules := []Rule{
 		EmptyRejectRule,
 		NewSizeFilter(filterSupport),
-		NewSigFilter(policies.ChannelWriters, policies.ChannelOrdererWriters, filterSupport),
+		//NewSigFilter(policies.ChannelWriters, policies.ChannelOrdererWriters, filterSupport),
+		NewMessageProcessingRule(filterSupport),
 	}
 
 	if !config.General.Authentication.NoExpirationChecks {

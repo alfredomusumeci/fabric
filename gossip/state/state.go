@@ -9,7 +9,7 @@ package state
 import (
 	"bytes"
 	"github.com/hyperledger/fabric-protos-go/msp"
-	util2 "github.com/hyperledger/fabric/common/util"
+	event "github.com/hyperledger/fabric/common/blocc-events"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -191,29 +191,30 @@ func NewGossipStateProvider(
 	blockingMode bool,
 	config *StateConfig,
 ) GossipStateProvider {
-	logger.Debug("Listening to all messages")
-	allMsgChan, _ := services.Accept(func(message interface{}) bool {
-		return true
-	}, false)
-
-	defer logger.Debug("Listening to all messages done")
-	go func() {
-		for msg := range allMsgChan {
-			logger.Debug("Received message: ", msg)
-		}
-	}()
-
 	gossipChan, _ := services.Accept(func(message interface{}) bool {
 		// Get only data messages
 		return protoext.IsDataMsg(message.(*proto.GossipMessage)) &&
 			bytes.Equal(message.(*proto.GossipMessage).Channel, []byte(chainID))
 	}, false)
 
-	gossipChanApproval, _ := services.Accept(func(message interface{}) bool {
-		// Get only data messages
-		return protoext.IsApprovalResponseMsg(message.(*proto.GossipMessage)) &&
-			bytes.Equal(message.(*proto.GossipMessage).Channel, []byte(chainID))
-	}, false)
+	//TODO: is more verification needed here?
+	approvalMsgFilter := func(message interface{}) bool {
+		receivedMsg := message.(protoext.ReceivedMessage)
+		msg := receivedMsg.GetGossipMessage()
+		if !protoext.IsApprovalResponseMsg(msg.GossipMessage) {
+			return false
+		}
+
+		if !bytes.Equal(msg.Channel, []byte(chainID)) {
+			return false
+		}
+
+		logger.Debug("Received message: ", msg)
+		return true
+	}
+
+	// Filter messages that contain approval responses to a previously published block
+	_, approvalChan := services.Accept(approvalMsgFilter, true)
 
 	remoteStateMsgFilter := func(message interface{}) bool {
 		receivedMsg := message.(protoext.ReceivedMessage)
@@ -280,8 +281,9 @@ func NewGossipStateProvider(
 	logger.Debug("Updating gossip ledger height to", height)
 	services.UpdateLedgerHeight(height, common2.ChannelID(s.chainID))
 
+	// TODO: check if approval blocks are received on the channel leader side and if they are needed
 	// Listen for incoming communication
-	go s.receiveAndCommitApprovalMessages(gossipChanApproval)
+	go s.receiveAndCommitApprovalBlocks(approvalChan)
 	go s.receiveAndQueueGossipMessages(gossipChan)
 	go s.receiveAndDispatchDirectMessages(commChan)
 	// Deliver in order messages into the incoming channel
@@ -296,64 +298,34 @@ func NewGossipStateProvider(
 	return s
 }
 
-// TODO: if I use for loop this stops working - check why
-func (s *GossipStateProviderImpl) receiveAndCommitApprovalMessages(ch <-chan *proto.GossipMessage) {
-	s.logger.Debug("BLOCC: Starting to receive approval blocks")
-	s.logger.Debug("BLOCC:", ch)
+func (s *GossipStateProviderImpl) receiveAndCommitApprovalBlocks(ch <-chan protoext.ReceivedMessage) {
 	for msg := range ch {
+		// TODO: 1. Check if the blockHash is present in the ledger (that is, the block for which approval is requested, has
+		// already been committed). Proceed, if so.
+		// TODO: 2. Check if a specific peer has already committed the block with the PEER Signature TX, i.e. the signature
+		// on the block is the same as the package id within the gossip message. If so, don't commit again.
+
 		s.logger.Debug("BLOCC: Adding an approval block")
-		go func(msg *proto.GossipMessage) {
-			emptyBlock := &common.Block{
-				Header: &common.BlockHeader{
-					Number: s.maxAvailableLedgerHeight() + 1,
-				},
-				Data: &common.BlockData{
-					Data: [][]byte{},
-				},
-				Metadata: &common.BlockMetadata{
-					Metadata: [][]byte{},
-				},
+		go func(msg protoext.ReceivedMessage) {
+			identity := msg.GetConnectionInfo().Identity
+			sID := &msp.SerializedIdentity{}
+			err := pb.Unmarshal(identity, sID)
+			if err != nil {
+				s.logger.Warning("Could not unmarshal identity, skipping approval block")
+				return
 			}
 
-			//Dummy TX for the moment being
-			creator := protoutil.MarshalOrPanic(&msp.SerializedIdentity{
-				Mspid:   "OrgDummyTest",
-				IdBytes: []byte("creator"),
-			})
-			nonce := make([]byte, 24)
-			txid := protoutil.ComputeTxID(creator, nonce)
+			mspId := sID.Mspid
+			idBytes := sID.IdBytes
 
-			emptyBlock.Data = &common.BlockData{
-				Data: [][]byte{
-					protoutil.MarshalOrPanic(&common.Envelope{
-						Payload: protoutil.MarshalOrPanic(&common.Payload{
-							Header: &common.Header{
-								ChannelHeader: protoutil.MarshalOrPanic(&common.ChannelHeader{
-									Type:      int32(common.HeaderType_PEER_SIGNATURE_TX),
-									TxId:      txid,
-									ChannelId: s.chainID,
-									Timestamp: util2.CreateUtcTimestamp(),
-								}),
-								// Make sure to create a nonce and creator appropriately, otherwise will fail in validation
-								SignatureHeader: protoutil.MarshalOrPanic(&common.SignatureHeader{
-									Creator: creator,
-									Nonce:   nonce,
-								}),
-							},
-							Data: []byte{'d', 'u', 'm', 'm', 'y'},
-						}),
-						Signature: []byte("signature"),
-					}),
-				},
+			//approver, err := common3.GetDefaultSigner()
+			if err != nil {
+				s.logger.Warning("Could not get approver, skipping approval block")
+				return
 			}
 
-			// Commit empty block
-			if err := s.commitBlock(emptyBlock, nil); err != nil {
-				s.logger.Errorf("Empty block: got error while committing(%+v)", errors.WithStack(err))
-			}
+			event.GlobalEventBus.Publish(event.Event{MspID: mspId, IdBytes: idBytes})
 		}(msg)
-
-		s.logger.Debug("BLOCC: Done adding an approval block")
 	}
 }
 

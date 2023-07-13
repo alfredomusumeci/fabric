@@ -124,6 +124,7 @@ type GossipBlockCommitterImpl struct {
 	GossipSvc gossipSvc
 }
 
+// TODO: this has to be a pointer g *GossipBlockCommitterImpl
 func (g GossipBlockCommitterImpl) OnBlockCommitted(blockHash []byte) {
 	logger.Debug("BLOCC: now inside blockCommitted in gossip_service.go")
 	g.GossipSvc.OnBlockCommitted(nil)

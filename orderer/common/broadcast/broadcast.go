@@ -76,7 +76,7 @@ func (bh *Handler) Handle(srv ab.AtomicBroadcast_BroadcastServer) error {
 			logger.Warningf("Error reading from %s: %s", addr, err)
 			return err
 		}
-
+		logger.Debugf("BLOCC: Received message from %s: %s", addr, msg)
 		resp := bh.ProcessMessage(msg, addr)
 		err = srv.Send(resp)
 		if resp.Status != cb.Status_SUCCESS {

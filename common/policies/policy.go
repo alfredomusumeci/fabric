@@ -39,6 +39,9 @@ const (
 	// ChannelWriters is the label for the channel's writers policy (encompassing both orderer and application writers)
 	ChannelWriters = PathSeparator + ChannelPrefix + PathSeparator + "Writers"
 
+	// ChannelSensorySigners is the label for the channel's sensory signers policy according to the BLOCC requirements
+	ChannelSensorySigners = PathSeparator + ChannelPrefix + PathSeparator + "SensorySigners"
+
 	// ChannelApplicationReaders is the label for the channel's application readers policy
 	ChannelApplicationReaders = PathSeparator + ChannelPrefix + PathSeparator + ApplicationPrefix + PathSeparator + "Readers"
 
@@ -56,6 +59,9 @@ const (
 
 	// ChannelOrdererWriters is the label for the channel's orderer writers policy
 	ChannelOrdererWriters = PathSeparator + ChannelPrefix + PathSeparator + OrdererPrefix + PathSeparator + "Writers"
+
+	// ChannelOrdererSensorySigners is the label for the channel's orderer sensory signers policy
+	ChannelOrdererSensorySigners = PathSeparator + ChannelPrefix + PathSeparator + OrdererPrefix + PathSeparator + "SensorySigners"
 
 	// ChannelOrdererReaders is the label for the channel's orderer readers policy
 	ChannelOrdererReaders = PathSeparator + ChannelPrefix + PathSeparator + OrdererPrefix + PathSeparator + "Readers"

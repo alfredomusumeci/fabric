@@ -9,6 +9,7 @@ package node
 import (
 	"context"
 	"fmt"
+	"github.com/hyperledger/fabric/core/scc/bscc"
 	"io"
 	"io/ioutil"
 	"net"
@@ -628,6 +629,7 @@ func serve(args []string) error {
 		"lscc":       {},
 		"qscc":       {},
 		"cscc":       {},
+		"bscc":       {},
 		"_lifecycle": {},
 	}
 
@@ -736,6 +738,7 @@ func serve(args []string) error {
 		factory.GetDefault(),
 	)
 	qsccInst := scc.SelfDescribingSysCC(qscc.New(aclProvider, peerInstance))
+	bsccInst := bscc.New(peerInstance)
 
 	pb.RegisterChaincodeSupportServer(ccSrv.Server(), ccSupSrv)
 
@@ -782,13 +785,18 @@ func serve(args []string) error {
 		Metrics:                endorser.NewMetrics(metricsProvider),
 	}
 
+	//managerBSCC := bscc.NewBSCCManager()
+
 	// deploy system chaincodes
-	for _, cc := range []scc.SelfDescribingSysCC{lsccInst, csccInst, qsccInst, lifecycleSCC} {
-		if enabled, ok := chaincodeConfig.SCCAllowlist[cc.Name()]; !ok || !enabled {
-			logger.Infof("not deploying chaincode %s as it is not enabled", cc.Name())
-			continue
-		}
+	for _, cc := range []scc.SelfDescribingSysCC{lsccInst, csccInst, qsccInst, bsccInst, lifecycleSCC} {
+		//if enabled, ok := chaincodeConfig.SCCAllowlist[cc.Name()]; !ok || !enabled {
+		//	logger.Infof("not deploying chaincode %s as it is not enabled", cc.Name())
+		//	continue
+		//}
 		scc.DeploySysCC(cc, chaincodeSupport)
+		if cc.Name() == "bscc" {
+			bsccInst.Init(nil)
+		}
 	}
 
 	logger.Infof("Deployed system chaincodes")

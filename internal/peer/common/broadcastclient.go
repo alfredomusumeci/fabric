@@ -9,6 +9,7 @@ package common
 import (
 	cb "github.com/hyperledger/fabric-protos-go/common"
 	ab "github.com/hyperledger/fabric-protos-go/orderer"
+	"github.com/hyperledger/fabric/internal/pkg/comm"
 	"github.com/pkg/errors"
 )
 
@@ -25,6 +26,20 @@ type BroadcastGRPCClient struct {
 // GetBroadcastClient creates a simple instance of the BroadcastClient interface
 func GetBroadcastClient() (BroadcastClient, error) {
 	oc, err := NewOrdererClientFromEnv()
+	if err != nil {
+		return nil, err
+	}
+	bc, err := oc.Broadcast()
+	if err != nil {
+		return nil, err
+	}
+
+	return &BroadcastGRPCClient{Client: bc}, nil
+}
+
+// GetBroadcastClientWithParams creates a simple instance of the BroadcastClient interface
+func GetBroadcastClientWithParams(address string, clientConfig comm.ClientConfig, err error) (BroadcastClient, error) {
+	oc, err := NewOrdererClientFromEnvWithParams(address, clientConfig, err)
 	if err != nil {
 		return nil, err
 	}

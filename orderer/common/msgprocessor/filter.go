@@ -8,6 +8,9 @@ package msgprocessor
 
 import (
 	"errors"
+	"github.com/hyperledger/fabric/common/channelconfig"
+	"github.com/hyperledger/fabric/common/policies"
+	"github.com/hyperledger/fabric/protoutil"
 
 	ab "github.com/hyperledger/fabric-protos-go/common"
 )
@@ -30,6 +33,39 @@ func (a emptyRejectRule) Apply(message *ab.Envelope) error {
 	if message.Payload == nil {
 		return ErrEmptyMessage
 	}
+	return nil
+}
+
+// NewMessageProcessingRule changes the signature filter for sensory transactions
+func NewMessageProcessingRule(filterSupport channelconfig.Resources) Rule {
+	return &peerSignatureAcceptRule{
+		FilterSupport: filterSupport,
+	}
+}
+
+type peerSignatureAcceptRule struct {
+	FilterSupport channelconfig.Resources
+}
+
+func (a peerSignatureAcceptRule) Apply(message *ab.Envelope) error {
+	var err error
+	payload, err := protoutil.UnmarshalPayload(message.Payload)
+	if err != nil {
+		return err
+	}
+
+	chdr, err := protoutil.UnmarshalChannelHeader(payload.Header.ChannelHeader)
+	if err != nil {
+		return err
+	}
+
+	// If the message is sensory, change the signature policy to accept peer signatures
+	if chdr.Type == int32(ab.HeaderType_PEER_SIGNATURE_TX) {
+		NewSigFilter(policies.ChannelSensorySigners, policies.ChannelOrdererSensorySigners, a.FilterSupport)
+	} else {
+		NewSigFilter(policies.ChannelWriters, policies.ChannelOrdererWriters, a.FilterSupport)
+	}
+
 	return nil
 }
 

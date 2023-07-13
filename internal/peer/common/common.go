@@ -294,19 +294,29 @@ func CheckLogLevel(level string) error {
 
 func configFromEnv(prefix string) (address string, clientConfig comm.ClientConfig, err error) {
 	address = viper.GetString(prefix + ".address")
+	logger.Debug("BLOCC: address: %s", address)
 	clientConfig = comm.ClientConfig{}
 	connTimeout := viper.GetDuration(prefix + ".client.connTimeout")
+	logger.Debug("BLOCC: connTimeout: %v", connTimeout)
 	if connTimeout == time.Duration(0) {
 		connTimeout = defaultConnTimeout
 	}
 	clientConfig.DialTimeout = connTimeout
+	logger.Debug("BLOCC: dialTimeout: %v", clientConfig.DialTimeout)
 	secOpts := comm.SecureOptions{
 		UseTLS:             viper.GetBool(prefix + ".tls.enabled"),
 		RequireClientCert:  viper.GetBool(prefix + ".tls.clientAuthRequired"),
 		TimeShift:          viper.GetDuration(prefix + ".tls.handshakeTimeShift"),
 		ServerNameOverride: viper.GetString(prefix + ".tls.serverhostoverride"),
 	}
+	// Print out the TLS options
+	logger.Debug("BLOCC: TLS enabled: %v", secOpts.UseTLS)
+	logger.Debug("BLOCC: TLS clientAuthRequired: %v", secOpts.RequireClientCert)
+	logger.Debug("BLOCC: TLS handshakeTimeShift: %v", secOpts.TimeShift)
+	logger.Debug("BLOCC: TLS serverhostoverride: %v", secOpts.ServerNameOverride)
+	logger.Debug("BLOCC: secure options: %v", secOpts)
 	if secOpts.UseTLS {
+		logger.Debug("BLOCC: TLS rootcert path: %s", config.GetPath(prefix+".tls.rootcert.file"))
 		caPEM, res := ioutil.ReadFile(config.GetPath(prefix + ".tls.rootcert.file"))
 		if res != nil {
 			err = errors.WithMessagef(res, "unable to load %s.tls.rootcert.file", prefix)
@@ -322,12 +332,16 @@ func configFromEnv(prefix string) (address string, clientConfig comm.ClientConfi
 	}
 	clientConfig.SecOpts = secOpts
 	clientConfig.MaxRecvMsgSize = comm.DefaultMaxRecvMsgSize
+	logger.Debug("BLOCC: maxRecvMsgSize: %v", clientConfig.MaxRecvMsgSize)
 	if viper.IsSet(prefix + ".maxRecvMsgSize") {
 		clientConfig.MaxRecvMsgSize = int(viper.GetInt32(prefix + ".maxRecvMsgSize"))
+		logger.Debug("BLOCC: maxRecvMsgSize: %v", clientConfig.MaxRecvMsgSize)
 	}
 	clientConfig.MaxSendMsgSize = comm.DefaultMaxSendMsgSize
+	logger.Debug("BLOCC: maxSendMsgSize: %v", clientConfig.MaxSendMsgSize)
 	if viper.IsSet(prefix + ".maxSendMsgSize") {
 		clientConfig.MaxSendMsgSize = int(viper.GetInt32(prefix + ".maxSendMsgSize"))
+		logger.Debug("BLOCC: maxSendMsgSize: %v", clientConfig.MaxSendMsgSize)
 	}
 	return
 }

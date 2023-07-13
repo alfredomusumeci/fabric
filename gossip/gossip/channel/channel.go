@@ -599,9 +599,6 @@ func (gc *gossipChannel) ConfigureChannel(joinMsg api.JoinChannelMessage) {
 
 // HandleMessage processes a message sent by a remote peer
 func (gc *gossipChannel) HandleMessage(msg protoext.ReceivedMessage) {
-	gc.logger.Debug("BLOCC: Handling message", msg.GetGossipMessage())
-	gc.logger.Debug("BLOCC: this is channel", gc.chainID.String())
-
 	if !gc.verifyMsg(msg) {
 		gc.logger.Warning("Failed verifying message:", msg.GetGossipMessage().GossipMessage)
 		return
@@ -622,16 +619,6 @@ func (gc *gossipChannel) HandleMessage(msg protoext.ReceivedMessage) {
 		return
 	}
 
-	// Find out whether its info/pull/data msg etc..
-	gc.logger.Debug("BLOCC: IsDataMsg:", protoext.IsDataMsg(m.GossipMessage))
-	gc.logger.Debug("BLOCC: IsStateInfoMsg:", protoext.IsStateInfoMsg(m.GossipMessage))
-	gc.logger.Debug("BLOCC: IsStateInfoPullRequestMsg:", protoext.IsStateInfoPullRequestMsg(m.GossipMessage))
-	gc.logger.Debug("BLOCC: IsStateInfoSnapshot:", protoext.IsStateInfoSnapshot(m.GossipMessage))
-	gc.logger.Debug("BLOCC: IsAliveMsg:", protoext.IsAliveMsg(m.GossipMessage))
-	gc.logger.Debug("BLOCC: IsLeadershipMsg:", protoext.IsLeadershipMsg(m.GossipMessage))
-	gc.logger.Debug("BLOCC: IsApprovalRequestMsg", protoext.IsApprovalRequestMsg(m.GossipMessage))
-	gc.logger.Debug("BLOCC: IsApprovalResponseMsg", protoext.IsApprovalResponseMsg(m.GossipMessage))
-
 	if protoext.IsApprovalRequestMsg(m.GossipMessage) {
 		gc.logger.Debug("BLOCC: Inside HandleMessage For Approval:", m.String())
 		senderIdentity := gc.GetIdentityByPKIID(msg.GetConnectionInfo().ID)
@@ -646,6 +633,17 @@ func (gc *gossipChannel) HandleMessage(msg protoext.ReceivedMessage) {
 		gc.logger.Debug("BLOCC: Sender and Receiver are different, so processing the message")
 		msg.Respond(gc.createApprovalMessageResponse(receiverIdentity))
 		return
+	}
+
+	// TODO: Not sure if this is needed
+	if protoext.IsApprovalResponseMsg(m.GossipMessage) {
+		gc.logger.Debug("BLOCC: Inside HandleMessage For Approval Response:", m.String())
+		//approver, err := common2.GetDefaultSigner()
+		//if err != nil {
+		//	gc.logger.Warning("Could not get approver, skipping approval block")
+		//	return
+		//}
+		//event.GlobalEventBus.Publish(event.Event{Approver: approver})
 	}
 
 	if protoext.IsStateInfoPullRequestMsg(m.GossipMessage) {

@@ -8,6 +8,7 @@ package common
 import (
 	"context"
 	"crypto/tls"
+	"github.com/hyperledger/fabric/internal/pkg/comm"
 
 	ab "github.com/hyperledger/fabric-protos-go/orderer"
 	"github.com/pkg/errors"
@@ -23,6 +24,29 @@ type OrdererClient struct {
 // global Viper instance
 func NewOrdererClientFromEnv() (*OrdererClient, error) {
 	address, clientConfig, err := configFromEnv("orderer")
+	logger.Debug("BLOCC: Orderer address: ", address)
+	// Print all settins in clientConfig
+	logger.Debug("BLOCC: Orderer clientConfig: ", clientConfig.SecOpts)
+	logger.Debug("BLOCC: Orderer clientConfig: ", clientConfig.MaxRecvMsgSize)
+	logger.Debug("BLOCC: Orderer clientConfig: ", clientConfig.DialTimeout)
+	logger.Debug("BLOCC: Orderer clientConfig: ", clientConfig.AsyncConnect)
+	if err != nil {
+		return nil, errors.WithMessage(err, "failed to load config for OrdererClient")
+	}
+	cc, err := newCommonClient(address, clientConfig)
+	if err != nil {
+		return nil, errors.WithMessage(err, "failed to create OrdererClient from config")
+	}
+	return &OrdererClient{CommonClient: cc}, nil
+}
+
+func NewOrdererClientFromEnvWithParams(address string, clientConfig comm.ClientConfig, err error) (*OrdererClient, error) {
+	logger.Debug("BLOCC: Orderer address: ", address)
+	// Print all settins in clientConfig
+	logger.Debug("BLOCC: Orderer clientConfig: ", clientConfig.SecOpts)
+	logger.Debug("BLOCC: Orderer clientConfig: ", clientConfig.MaxRecvMsgSize)
+	logger.Debug("BLOCC: Orderer clientConfig: ", clientConfig.DialTimeout)
+	logger.Debug("BLOCC: Orderer clientConfig: ", clientConfig.AsyncConnect)
 	if err != nil {
 		return nil, errors.WithMessage(err, "failed to load config for OrdererClient")
 	}
