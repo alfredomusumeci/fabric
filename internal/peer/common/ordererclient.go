@@ -24,12 +24,6 @@ type OrdererClient struct {
 // global Viper instance
 func NewOrdererClientFromEnv() (*OrdererClient, error) {
 	address, clientConfig, err := configFromEnv("orderer")
-	logger.Debug("BLOCC: Orderer address: ", address)
-	// Print all settins in clientConfig
-	logger.Debug("BLOCC: Orderer clientConfig: ", clientConfig.SecOpts)
-	logger.Debug("BLOCC: Orderer clientConfig: ", clientConfig.MaxRecvMsgSize)
-	logger.Debug("BLOCC: Orderer clientConfig: ", clientConfig.DialTimeout)
-	logger.Debug("BLOCC: Orderer clientConfig: ", clientConfig.AsyncConnect)
 	if err != nil {
 		return nil, errors.WithMessage(err, "failed to load config for OrdererClient")
 	}

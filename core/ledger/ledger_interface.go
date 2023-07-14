@@ -233,10 +233,6 @@ type PeerLedger interface {
 	// CommitNotifications channel to close. There is expected to be only one consumer at a time. The function returns error
 	// if already a CommitNotification channel is active.
 	CommitNotificationsChannel(done <-chan struct{}) (<-chan *CommitNotification, error)
-
-	//TODO: remove this or implement it
-	//SetBlockCommitterGossipService allows to change the GossipService
-	SetBlockCommitterGossipService(gossipService GossipBlockCommitter)
 }
 
 // SimpleQueryExecutor encapsulates basic functions

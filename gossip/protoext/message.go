@@ -208,5 +208,5 @@ func IsTagLegal(m *gossip.GossipMessage) error {
 		return nil
 	}
 
-	return nil
+	return fmt.Errorf("Unknown message type: %v", m)
 }

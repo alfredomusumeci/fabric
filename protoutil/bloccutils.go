@@ -2,8 +2,10 @@ package protoutil
 
 import (
 	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/hyperledger/fabric-protos-go/common"
 	"github.com/pkg/errors"
+	"time"
 )
 
 // CreateSignedEnvelopeWithTxID creates a signed envelope of the desired type, with
@@ -31,7 +33,7 @@ func CreateSignedEnvelopeWithTxIDWithTLSBinding(
 	epoch uint64,
 	tlsCertHash []byte,
 ) (*common.Envelope, string, error) {
-	payloadChannelHeader := MakeChannelHeader(txType, msgVersion, channelID, epoch)
+	payloadChannelHeader := MakeChannelHeaderWithNano(txType, msgVersion, channelID, epoch)
 	payloadChannelHeader.TlsCertHash = tlsCertHash
 	var err error
 	payloadSignatureHeader := &common.SignatureHeader{}
@@ -71,4 +73,22 @@ func CreateSignedEnvelopeWithTxIDWithTLSBinding(
 	txID := payloadChannelHeader.TxId
 
 	return env, txID, nil
+}
+
+// MakeChannelHeaderWithNano creates a ChannelHeader.
+func MakeChannelHeaderWithNano(headerType common.HeaderType, version int32, chainID string, epoch uint64) *common.ChannelHeader {
+	now := time.Now()
+	seconds := now.Unix()
+	nanos := int32(now.Sub(time.Unix(seconds, 0)))
+
+	return &common.ChannelHeader{
+		Type:    int32(headerType),
+		Version: version,
+		Timestamp: &timestamp.Timestamp{
+			Seconds: seconds,
+			Nanos:   nanos,
+		},
+		ChannelId: chainID,
+		Epoch:     epoch,
+	}
 }

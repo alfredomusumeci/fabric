@@ -66,7 +66,6 @@ func CreateStandardChannelFilters(filterSupport channelconfig.Resources, config 
 	rules := []Rule{
 		EmptyRejectRule,
 		NewSizeFilter(filterSupport),
-		//NewSigFilter(policies.ChannelWriters, policies.ChannelOrdererWriters, filterSupport),
 		NewMessageProcessingRule(filterSupport),
 	}
 

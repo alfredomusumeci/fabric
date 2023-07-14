@@ -625,6 +625,7 @@ func (gc *gossipChannel) HandleMessage(msg protoext.ReceivedMessage) {
 		senderIdentity := gc.GetIdentityByPKIID(msg.GetConnectionInfo().ID)
 		receiverPkiId := gc.Self().GetStateInfo().GetPkiId()
 		receiverIdentity := gc.GetIdentityByPKIID(receiverPkiId)
+		txID := m.GetApprovalRequest().GetSensoryTxid()
 
 		if bytes.Equal(senderIdentity, receiverIdentity) {
 			gc.logger.Debug("BLOCC: Sender and Receiver are same, so ignoring the message")
@@ -636,7 +637,7 @@ func (gc *gossipChannel) HandleMessage(msg protoext.ReceivedMessage) {
 		// and then send a response back to the peer that sent the approval request with the tx id)
 		msg.Respond(gc.createApprovalMessageResponse(receiverIdentity))
 
-		event.GlobalEventBus.Publish(event.Event{ChannelID: gc.chainID.String()})
+		event.GlobalEventBus.Publish(event.Event{ChannelID: gc.chainID.String(), SensoryTxID: txID})
 		return
 	}
 
@@ -665,8 +666,6 @@ func (gc *gossipChannel) HandleMessage(msg protoext.ReceivedMessage) {
 		added := false
 
 		if protoext.IsDataMsg(m.GossipMessage) {
-			gc.logger.Debug("BLOCC: Data Message:", m.String())
-
 			if m.GetDataMsg().Payload == nil {
 				gc.logger.Warning("Payload is empty, got it from", msg.GetConnectionInfo().ID)
 				return
@@ -716,8 +715,6 @@ func (gc *gossipChannel) HandleMessage(msg protoext.ReceivedMessage) {
 			return
 		}
 		if protoext.IsDataUpdate(m.GossipMessage) {
-			gc.logger.Debug("PULL BLOCC: DataUpdate message:", m.String())
-
 			// Iterate over the envelopes, and filter out blocks
 			// that we already have in the blockMsgStore, or blocks that
 			// are too far in the past.
@@ -903,7 +900,7 @@ func (gc *gossipChannel) createApprovalMessageResponse(pkiId []byte) *proto.Goss
 		Content: &proto.GossipMessage_ApprovalResponse{
 			ApprovalResponse: &proto.ApprovalMessageResponse{
 				PkiId:        pkiId,
-				ApprovalHash: []byte{0},
+				ApprovalTxid: []byte{0},
 			},
 		},
 	}

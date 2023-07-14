@@ -87,9 +87,9 @@ func (g *Node) OnBlockCommitted(txID string) {
 		Tag:     pg.GossipMessage_APPROVAL,
 		Content: &pg.GossipMessage_ApprovalRequest{
 			ApprovalRequest: &pg.ApprovalMessageRequest{
-				PkiId:        g.comm.GetPKIid(),
-				Channel_MAC:  channel.GenerateMAC(g.comm.GetPKIid(), common.ChannelID("mychannel")),
-				ApprovalHash: []byte(txID),
+				PkiId:       g.comm.GetPKIid(),
+				Channel_MAC: channel.GenerateMAC(g.comm.GetPKIid(), common.ChannelID("mychannel")),
+				SensoryTxid: []byte(txID),
 			},
 		},
 	}
@@ -382,15 +382,7 @@ func (g *Node) handleMessage(m protoext.ReceivedMessage) {
 		return
 	}
 
-	tag := msg.GetTag()
-	g.logger.Debug("BLOCC: Message tag: ", tag)
-	if tag == pg.GossipMessage_APPROVAL {
-		g.logger.Debug("BLOCC: Received an approval message")
-	}
-	g.logger.Debug("BLOCC: ", msg.GetContent())
-
 	if protoext.IsChannelRestricted(msg.GossipMessage) {
-		g.logger.Debug("BLOCC: Channel: ", g.chanState.lookupChannelForMsg(m), " is restricted")
 		if gc := g.chanState.lookupChannelForMsg(m); gc == nil {
 			// If we're not in the channel, we should still forward to peers of our org
 			// in case it's a StateInfo message
@@ -523,8 +515,7 @@ func (g *Node) gossipBatch(msgs []*emittedGossipMessage) {
 	// Gossip empty messages
 	approvals, msgs := partitionMessages(isApproval, msgs)
 	g.gossipInChan(approvals, func(gc channel.GossipChannel) filter.RoutingFilter {
-		// TODO: play with these filters
-		return filter.CombineRoutingFilters()
+		return filter.CombineRoutingFilters(gc.EligibleForChannel)
 	})
 
 	// Gossip blocks
@@ -638,7 +629,6 @@ func (g *Node) gossipInChan(messages []*emittedGossipMessage, chanRoutingFactory
 
 		// Send the messages to the remote peers
 		for _, msg := range messagesOfChannel {
-			g.logger.Debug("BLOCC: sending message with tag: ", msg.GetTag())
 			filteredPeers := g.removeSelfLoop(msg, peers2Send)
 			g.comm.Send(msg.SignedGossipMessage, filteredPeers...)
 		}
@@ -708,8 +698,6 @@ func (g *Node) SendByCriteria(msg *protoext.SignedGossipMessage, criteria SendCr
 func (g *Node) Gossip(msg *pg.GossipMessage) {
 	// Educate developers to Gossip messages with the right tags.
 	// See IsTagLegal() for wanted behavior.
-	g.logger.Debugf("BLOCC: Gossiping msg: %s", msg.GetTag())
-	g.logger.Debug("BLOCC: Gossiping msg: ", msg.String())
 	if err := protoext.IsTagLegal(msg); err != nil {
 		panic(errors.WithStack(err))
 	}
@@ -720,23 +708,19 @@ func (g *Node) Gossip(msg *pg.GossipMessage) {
 
 	var err error
 	if protoext.IsDataMsg(sMsg.GossipMessage) {
-		g.logger.Debug("1 tag: ", sMsg.GossipMessage.GetTag())
 		sMsg, err = protoext.NoopSign(sMsg.GossipMessage)
 	} else {
-		g.logger.Debug("2 tag: ", sMsg.GossipMessage.GetTag())
 		_, err = sMsg.Sign(func(msg []byte) ([]byte, error) {
 			return g.mcs.Sign(msg)
 		})
 	}
 
 	if err != nil {
-		g.logger.Debug("3 tag: ", sMsg.GossipMessage.GetTag())
 		g.logger.Warningf("Failed signing message: %+v", errors.WithStack(err))
 		return
 	}
 
 	if protoext.IsChannelRestricted(msg) {
-		g.logger.Debug("4 tag: ", sMsg.GossipMessage.GetTag())
 		gc := g.chanState.getGossipChannelByChainID(msg.Channel)
 		if gc == nil {
 			g.logger.Warning("Failed obtaining gossipChannel of", msg.Channel, "aborting")
@@ -746,7 +730,6 @@ func (g *Node) Gossip(msg *pg.GossipMessage) {
 			gc.AddToMsgStore(sMsg)
 		}
 	}
-	g.logger.Debug("5 tag: ", sMsg.GossipMessage.GetTag())
 	if g.conf.PropagateIterations == 0 {
 		return
 	}

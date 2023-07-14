@@ -78,11 +78,6 @@ type kvLedger struct {
 	blockCommitter service.GossipBlockCommitter
 }
 
-// TODO: implement this or remove it
-func (l *kvLedger) SetBlockCommitterGossipService(gossipService ledger.GossipBlockCommitter) {
-	l.blockCommitter = gossipService
-}
-
 type lgrInitializer struct {
 	ledgerID                 string
 	initializingFromSnapshot bool
@@ -636,9 +631,10 @@ func (l *kvLedger) CommitLegacy(pvtdataAndBlock *ledger.BlockAndPvtData, commitO
 		return err
 	}
 
+	l.snapshotMgr.events <- &event{commitDone, blockNumber}
+
 	l.gossipIfSensoryTx(pvtdataAndBlock)
 
-	l.snapshotMgr.events <- &event{commitDone, blockNumber}
 	return nil
 }
 

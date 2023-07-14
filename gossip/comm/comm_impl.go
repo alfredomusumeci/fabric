@@ -213,9 +213,7 @@ func (c *commImpl) createConnection(endpoint string, expectedPKIID common.PKIidT
 }
 
 func (c *commImpl) Send(msg *protoext.SignedGossipMessage, peers ...*RemotePeer) {
-	c.logger.Debug("BLOCC: Entering, msg:", msg, "tag is:", msg.GetTag(), "peers:", peers)
 	if c.isStopping() || len(peers) == 0 {
-		c.logger.Debug("BLOCC: Exiting the commImpl.send() function")
 		return
 	}
 	c.logger.Debug("Entering, sending", msg, "to ", len(peers), "peers")

@@ -96,7 +96,7 @@ func (bscc *BSCC) Invoke(stub shim.ChaincodeStubInterface) pb.Response {
 // ----------------- BSCC Implementation ----------------- //
 
 // TODO: see if it's worth checking if the signer is correct
-func (bscc *BSCC) sendApprovalToOrderer(channelID string) pb.Response {
+func (bscc *BSCC) sendApprovalToOrderer(channelID string, SensoryTxID []byte) pb.Response {
 	bloccProtoLogger.Debug("sendApprovalToOrderer")
 	var err error
 
@@ -105,7 +105,7 @@ func (bscc *BSCC) sendApprovalToOrderer(channelID string) pb.Response {
 		cb.HeaderType_PEER_SIGNATURE_TX,
 		channelID,
 		signer,
-		&cb.Envelope{},
+		&cb.ApprovalTxEnvelope{TxId: SensoryTxID},
 		0,
 		0,
 	)
@@ -279,5 +279,5 @@ func (bscc *BSCC) sendApprovalToOrderer(channelID string) pb.Response {
 
 func (bscc *BSCC) processEvent(event event.Event) {
 	bloccProtoLogger.Info("BLOCC - Received approval event: ", event)
-	bscc.sendApprovalToOrderer(event.ChannelID)
+	bscc.sendApprovalToOrderer(event.ChannelID, event.SensoryTxID)
 }

@@ -271,13 +271,10 @@ func ValidateTransaction(e *common.Envelope, cryptoProvider bccsp.BCCSP) (*commo
 	}
 
 	// validate the signature in the envelope
-	// BLOCC: TODO: this is a temporary hack to see if the empty block commit works
-	if chdr.Type != int32(common.HeaderType_PEER_SIGNATURE_TX) {
-		err = checkSignatureFromCreator(shdr.Creator, e.Signature, e.Payload, chdr.ChannelId, cryptoProvider)
-		if err != nil {
-			putilsLogger.Errorf("checkSignatureFromCreator returns err %s", err)
-			return nil, pb.TxValidationCode_BAD_CREATOR_SIGNATURE
-		}
+	err = checkSignatureFromCreator(shdr.Creator, e.Signature, e.Payload, chdr.ChannelId, cryptoProvider)
+	if err != nil {
+		putilsLogger.Errorf("checkSignatureFromCreator returns err %s", err)
+		return nil, pb.TxValidationCode_BAD_CREATOR_SIGNATURE
 	}
 
 	// TODO: ensure that creator can transact with us (some ACLs?) which set of APIs is supposed to give us this info?
@@ -320,7 +317,7 @@ func ValidateTransaction(e *common.Envelope, cryptoProvider bccsp.BCCSP) (*commo
 	case common.HeaderType_PEER_SIGNATURE_TX:
 		// These are just "I've seen it" messages, no payload to validate.
 		// For now, just return valid.
-		// TODO: check if the creator is valid.
+		// TODO: check if the creator is valid (this is actually already done)
 		// TODO: if it has already been seen, return an error.
 
 		return payload, pb.TxValidationCode_VALID

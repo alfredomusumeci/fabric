@@ -124,10 +124,12 @@ type GossipBlockCommitterImpl struct {
 	GossipSvc gossipSvc
 }
 
-// TODO: this has to be a pointer g *GossipBlockCommitterImpl
-func (g GossipBlockCommitterImpl) OnBlockCommitted(txID string) {
-	logger.Debug("BLOCC: now inside blockCommitted in gossip_service.go")
-	g.GossipSvc.OnBlockCommitted("")
+func (g *GossipBlockCommitterImpl) OnBlockCommitted(txID string) {
+	g.GossipSvc.OnBlockCommitted(txID)
+}
+
+func (g *GossipBlockCommitterImpl) SetGossipSvc(gossipService gossipSvc) {
+	g.GossipSvc = gossipService
 }
 
 // GossipServiceAdapter serves to provide basic functionality

@@ -26,13 +26,11 @@ func MembershipResponseToString(mr *gossip.MembershipResponse) string {
 }
 
 func ApprovalMessageRequestToString(am *gossip.ApprovalMessageRequest) string {
-	// TODO: unmarshal and print metadata
-	return fmt.Sprint("Approval Message Request For Block:", am.ApprovalHash, " PKI-id:", am.PkiId, " channel MAC:", am.Channel_MAC)
+	return fmt.Sprint("Approval Message Request For Tx:", am.SensoryTxid, " PKI-id:", am.PkiId, " channel MAC:", am.Channel_MAC)
 }
 
 func ApprovalMessageResponseToString(am *gossip.ApprovalMessageResponse) string {
-	// TODO: unmarshal and print metadata
-	return fmt.Sprint("Approval Message Response For Block:", am.ApprovalHash, " PKI-id:", am.PkiId)
+	return fmt.Sprint("Approval Message Response For Tx:", am.ApprovalTxid, " PKI-id:", am.PkiId)
 }
 
 // AliveMessageToString of AliveMessage prints Alive Message, Identity and Timestamp

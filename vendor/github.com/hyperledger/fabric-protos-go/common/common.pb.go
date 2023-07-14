@@ -78,7 +78,7 @@ const (
 	HeaderType_ORDERER_TRANSACTION  HeaderType = 4
 	HeaderType_DELIVER_SEEK_INFO    HeaderType = 5
 	HeaderType_CHAINCODE_PACKAGE    HeaderType = 6
-	// Added by Alfredo
+	// BLOCC Protocol
 	HeaderType_PEER_SIGNATURE_TX HeaderType = 10
 )
 

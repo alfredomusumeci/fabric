@@ -23,11 +23,6 @@ type Config struct {
 	CryptoProvider      bccsp.BCCSP
 }
 
-//type Clients struct {
-//	EndorserClients []pb.EndorserClient
-//	DeliverClients  []pb.DeliverClient
-//}
-
 func (bscc *BSCC) createDeliverGroupAndContext(txID string) (*chaincode.DeliverGroup, context.Context) {
 	var dg *chaincode.DeliverGroup
 	var ctx context.Context

@@ -7,7 +7,6 @@ SPDX-License-Identifier: Apache-2.0
 package comm
 
 import (
-	"github.com/hyperledger/fabric/gossip/util"
 	"sync"
 
 	"github.com/hyperledger/fabric/gossip/common"
@@ -84,21 +83,16 @@ func (m *ChannelDeMultiplexer) AddChannel(predicate common.MessageAcceptor) <-ch
 //
 // Blocks if any one channel that would receive msg has a full buffer.
 func (m *ChannelDeMultiplexer) DeMultiplex(msg interface{}) {
-	logger := util.GetLogger(util.CommLogger, "peer0.org1.example.com")
-
 	m.lock.Lock()
 	if m.closed {
 		m.lock.Unlock()
 		return
 	}
 	channels := m.channels
-	logger.Debug("BLOCC: DeMultiplexing message", msg, "to", len(channels), "channels")
-	logger.Debug("BLOCC: Channels are", channels)
 	m.deMuxInProgress.Add(1)
 	m.lock.Unlock()
 
 	for _, ch := range channels {
-		logger.Debug("BLOCC: Checking channel", ch, "for message", msg)
 		if ch.pred(msg) {
 			select {
 			case <-m.stopCh:

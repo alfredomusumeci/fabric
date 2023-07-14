@@ -338,8 +338,6 @@ func (p *Provider) Open(ledgerID string) (ledger.PeerLedger, error) {
 }
 
 func (p *Provider) open(ledgerID string, bootSnapshotMetadata *SnapshotMetadata, initializingFromSnapshot bool) (ledger.PeerLedger, error) {
-	logger.Debug("BLOCC: Using function open from kvledger provider")
-
 	// Get the block store for a chain/ledger
 	blockStore, err := p.blkStoreProvider.Open(ledgerID)
 	if err != nil {
@@ -389,9 +387,6 @@ func (p *Provider) open(ledgerID string, bootSnapshotMetadata *SnapshotMetadata,
 	if err != nil {
 		return nil, err
 	}
-
-	logger.Debug("BLOCC: Finished using function open from kvledger provider")
-
 	return l, nil
 }
 

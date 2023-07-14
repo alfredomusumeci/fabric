@@ -328,7 +328,7 @@ func (d *gossipDiscoveryImpl) handleMsgFromComm(msg protoext.ReceivedMessage) {
 		return
 	}
 
-	d.logger.Debug("BLOCC: Got message in COMM:", m)
+	d.logger.Debug("Got message:", m)
 	defer d.logger.Debug("Exiting")
 
 	if memReq := m.GetMemReq(); memReq != nil {

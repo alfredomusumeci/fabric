@@ -260,7 +260,6 @@ func NewGossipStateProvider(
 	logger.Debug("Updating gossip ledger height to", height)
 	services.UpdateLedgerHeight(height, common2.ChannelID(s.chainID))
 
-	// TODO: check if approval blocks are received on the channel leader side and if they are needed
 	// Listen for incoming communication
 	go s.receiveAndQueueGossipMessages(gossipChan)
 	go s.receiveAndDispatchDirectMessages(commChan)
@@ -791,12 +790,6 @@ func (s *GossipStateProviderImpl) straggler(currHeight uint64, receivedPayload *
 
 func (s *GossipStateProviderImpl) commitBlock(block *common.Block, pvtData util.PvtDataCollections) error {
 	t1 := time.Now()
-
-	//// TODO: Temporarily skipping the problem of updating the ledger height appropriately
-	height, _ := s.ledger.LedgerHeight()
-	if block.Header.Number < height {
-		block.Header.Number = height
-	}
 
 	// Commit block with available private transactions
 	if err := s.ledger.StoreBlock(block, pvtData); err != nil {

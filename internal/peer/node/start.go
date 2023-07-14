@@ -445,29 +445,27 @@ func serve(args []string) error {
 
 	blockCommitter := gossipservice.GossipBlockCommitterImpl{}
 
-	//TODO: bring back to original position and maybe use the state listener to update blockCommitter
-	//peerInstance.LedgerMgr = ledgermgmt.NewLedgerMgr(
-	//	&ledgermgmt.Initializer{
-	//		CustomTxProcessors:              txProcessors,
-	//		DeployedChaincodeInfoProvider:   lifecycleValidatorCommitter,
-	//		MembershipInfoProvider:          membershipInfoProvider,
-	//		ChaincodeLifecycleEventProvider: lifecycleCache,
-	//		MetricsProvider:                 metricsProvider,
-	//		HealthCheckRegistry:             opsSystem,
-	//		StateListeners:                  []ledger.StateListener{lifecycleCache},
-	//		Config:                          ledgerConfig(),
-	//		HashProvider:                    factory.GetDefault(),
-	//		EbMetadataProvider:              ebMetadataProvider,
-	//		BlockCommitter:                  blockCommitter,
-	//	},
-	//)
+	peerInstance.LedgerMgr = ledgermgmt.NewLedgerMgr(
+		&ledgermgmt.Initializer{
+			CustomTxProcessors:              txProcessors,
+			DeployedChaincodeInfoProvider:   lifecycleValidatorCommitter,
+			MembershipInfoProvider:          membershipInfoProvider,
+			ChaincodeLifecycleEventProvider: lifecycleCache,
+			MetricsProvider:                 metricsProvider,
+			HealthCheckRegistry:             opsSystem,
+			StateListeners:                  []ledger.StateListener{lifecycleCache},
+			Config:                          ledgerConfig(),
+			HashProvider:                    factory.GetDefault(),
+			EbMetadataProvider:              ebMetadataProvider,
+			BlockCommitter:                  &blockCommitter,
+		},
+	)
 
 	peerServer, err := comm.NewGRPCServer(listenAddr, serverConfig)
 	if err != nil {
 		logger.Fatalf("Failed to create peer server (%s)", err)
 	}
 
-	logger.Debug("BLOCC: initializing gossip service")
 	// FIXME: Creating the gossip service has the side effect of starting a bunch
 	// of go routines and registration with the grpc server.
 	gossipService, err := initGossipService(
@@ -487,22 +485,7 @@ func serve(args []string) error {
 
 	peerInstance.GossipService = gossipService
 
-	blockCommitter.GossipSvc = gossipService
-	peerInstance.LedgerMgr = ledgermgmt.NewLedgerMgr(
-		&ledgermgmt.Initializer{
-			CustomTxProcessors:              txProcessors,
-			DeployedChaincodeInfoProvider:   lifecycleValidatorCommitter,
-			MembershipInfoProvider:          membershipInfoProvider,
-			ChaincodeLifecycleEventProvider: lifecycleCache,
-			MetricsProvider:                 metricsProvider,
-			HealthCheckRegistry:             opsSystem,
-			StateListeners:                  []ledger.StateListener{lifecycleCache},
-			Config:                          ledgerConfig(),
-			HashProvider:                    factory.GetDefault(),
-			EbMetadataProvider:              ebMetadataProvider,
-			BlockCommitter:                  blockCommitter,
-		},
-	)
+	blockCommitter.SetGossipSvc(gossipService)
 
 	if err := lifecycleCache.InitializeLocalChaincodes(); err != nil {
 		return errors.WithMessage(err, "could not initialize local chaincodes")
@@ -784,8 +767,6 @@ func serve(args []string) error {
 		Support:                endorserSupport,
 		Metrics:                endorser.NewMetrics(metricsProvider),
 	}
-
-	//managerBSCC := bscc.NewBSCCManager()
 
 	// deploy system chaincodes
 	for _, cc := range []scc.SelfDescribingSysCC{lsccInst, csccInst, qsccInst, bsccInst, lifecycleSCC} {

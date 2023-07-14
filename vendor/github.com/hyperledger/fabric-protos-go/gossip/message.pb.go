@@ -705,7 +705,7 @@ func (*GossipMessage) XXX_OneofWrappers() []interface{} {
 type ApprovalMessageRequest struct {
 	PkiId                []byte   `protobuf:"bytes,2,opt,name=pki_id,json=pkiId,proto3" json:"pki_id,omitempty"`
 	Channel_MAC          []byte   `protobuf:"bytes,3,opt,name=channel_MAC,json=channelMAC,proto3" json:"channel_MAC,omitempty"`
-	ApprovalHash         []byte   `protobuf:"bytes,4,opt,name=approval_hash,json=approvalHash,proto3" json:"approval_hash,omitempty"`
+	SensoryTxid          []byte   `protobuf:"bytes,4,opt,name=sensory_txid,json=sensoryTxid,proto3" json:"sensory_txid,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -750,9 +750,9 @@ func (m *ApprovalMessageRequest) GetChannel_MAC() []byte {
 	return nil
 }
 
-func (m *ApprovalMessageRequest) GetApprovalHash() []byte {
+func (m *ApprovalMessageRequest) GetSensoryTxid() []byte {
 	if m != nil {
-		return m.ApprovalHash
+		return m.SensoryTxid
 	}
 	return nil
 }
@@ -762,7 +762,7 @@ func (m *ApprovalMessageRequest) GetApprovalHash() []byte {
 // hash of the block asking about approval
 type ApprovalMessageResponse struct {
 	PkiId                []byte   `protobuf:"bytes,2,opt,name=pki_id,json=pkiId,proto3" json:"pki_id,omitempty"`
-	ApprovalHash         []byte   `protobuf:"bytes,3,opt,name=approval_hash,json=approvalHash,proto3" json:"approval_hash,omitempty"`
+	ApprovalTxid         []byte   `protobuf:"bytes,3,opt,name=approval_txid,json=approvalTxid,proto3" json:"approval_txid,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -800,9 +800,9 @@ func (m *ApprovalMessageResponse) GetPkiId() []byte {
 	return nil
 }
 
-func (m *ApprovalMessageResponse) GetApprovalHash() []byte {
+func (m *ApprovalMessageResponse) GetApprovalTxid() []byte {
 	if m != nil {
-		return m.ApprovalHash
+		return m.ApprovalTxid
 	}
 	return nil
 }
