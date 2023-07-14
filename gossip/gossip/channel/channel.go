@@ -9,6 +9,7 @@ package channel
 import (
 	"bytes"
 	"fmt"
+	event "github.com/hyperledger/fabric/common/blocc-events"
 	"reflect"
 	"strconv"
 	"sync"
@@ -629,9 +630,13 @@ func (gc *gossipChannel) HandleMessage(msg protoext.ReceivedMessage) {
 			gc.logger.Debug("BLOCC: Sender and Receiver are same, so ignoring the message")
 			return
 		}
-		// TODO: Generate a response message and send it back to channel.go
+
 		gc.logger.Debug("BLOCC: Sender and Receiver are different, so processing the message")
+		// TODO: figure out what we want in the response if anything at all (maybe have the bscc commit the approval
+		// and then send a response back to the peer that sent the approval request with the tx id)
 		msg.Respond(gc.createApprovalMessageResponse(receiverIdentity))
+
+		event.GlobalEventBus.Publish(event.Event{ChannelID: gc.chainID.String()})
 		return
 	}
 

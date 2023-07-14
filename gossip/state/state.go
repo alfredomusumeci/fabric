@@ -8,8 +8,6 @@ package state
 
 import (
 	"bytes"
-	"github.com/hyperledger/fabric-protos-go/msp"
-	event "github.com/hyperledger/fabric/common/blocc-events"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -197,25 +195,6 @@ func NewGossipStateProvider(
 			bytes.Equal(message.(*proto.GossipMessage).Channel, []byte(chainID))
 	}, false)
 
-	//TODO: is more verification needed here?
-	approvalMsgFilter := func(message interface{}) bool {
-		receivedMsg := message.(protoext.ReceivedMessage)
-		msg := receivedMsg.GetGossipMessage()
-		if !protoext.IsApprovalResponseMsg(msg.GossipMessage) {
-			return false
-		}
-
-		if !bytes.Equal(msg.Channel, []byte(chainID)) {
-			return false
-		}
-
-		logger.Debug("Received message: ", msg)
-		return true
-	}
-
-	// Filter messages that contain approval responses to a previously published block
-	_, approvalChan := services.Accept(approvalMsgFilter, true)
-
 	remoteStateMsgFilter := func(message interface{}) bool {
 		receivedMsg := message.(protoext.ReceivedMessage)
 		msg := receivedMsg.GetGossipMessage()
@@ -283,7 +262,6 @@ func NewGossipStateProvider(
 
 	// TODO: check if approval blocks are received on the channel leader side and if they are needed
 	// Listen for incoming communication
-	go s.receiveAndCommitApprovalBlocks(approvalChan)
 	go s.receiveAndQueueGossipMessages(gossipChan)
 	go s.receiveAndDispatchDirectMessages(commChan)
 	// Deliver in order messages into the incoming channel
@@ -296,37 +274,6 @@ func NewGossipStateProvider(
 	go s.processStateRequests()
 
 	return s
-}
-
-func (s *GossipStateProviderImpl) receiveAndCommitApprovalBlocks(ch <-chan protoext.ReceivedMessage) {
-	for msg := range ch {
-		// TODO: 1. Check if the blockHash is present in the ledger (that is, the block for which approval is requested, has
-		// already been committed). Proceed, if so.
-		// TODO: 2. Check if a specific peer has already committed the block with the PEER Signature TX, i.e. the signature
-		// on the block is the same as the package id within the gossip message. If so, don't commit again.
-
-		s.logger.Debug("BLOCC: Adding an approval block")
-		go func(msg protoext.ReceivedMessage) {
-			identity := msg.GetConnectionInfo().Identity
-			sID := &msp.SerializedIdentity{}
-			err := pb.Unmarshal(identity, sID)
-			if err != nil {
-				s.logger.Warning("Could not unmarshal identity, skipping approval block")
-				return
-			}
-
-			mspId := sID.Mspid
-			idBytes := sID.IdBytes
-
-			//approver, err := common3.GetDefaultSigner()
-			if err != nil {
-				s.logger.Warning("Could not get approver, skipping approval block")
-				return
-			}
-
-			event.GlobalEventBus.Publish(event.Event{MspID: mspId, IdBytes: idBytes})
-		}(msg)
-	}
 }
 
 func (s *GossipStateProviderImpl) receiveAndQueueGossipMessages(ch <-chan *proto.GossipMessage) {

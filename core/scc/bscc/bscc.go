@@ -1,18 +1,14 @@
 package bscc
 
 import (
-	"context"
 	"fmt"
 	"github.com/hyperledger/fabric-chaincode-go/shim"
 	cb "github.com/hyperledger/fabric-protos-go/common"
-	"github.com/hyperledger/fabric-protos-go/msp"
 	pb "github.com/hyperledger/fabric-protos-go/peer"
 	event "github.com/hyperledger/fabric/common/blocc-events"
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/core/peer"
-	"github.com/hyperledger/fabric/internal/peer/chaincode"
 	"github.com/hyperledger/fabric/internal/peer/common"
-	//id "github.com/hyperledger/fabric/msp"
 	"github.com/hyperledger/fabric/protoutil"
 	"os"
 	"time"
@@ -85,6 +81,7 @@ func (bscc *BSCC) Init(stub shim.ChaincodeStubInterface) pb.Response {
 		OrgMspID:            orgMspID,
 		WaitForEvent:        true,
 		WaitForEventTimeout: 3 * time.Second,
+		CryptoProvider:      bscc.peerInstance.CryptoProvider,
 	}
 	bloccProtoLogger.Infof("BSCC config: %+v", bscc.config)
 
@@ -92,125 +89,44 @@ func (bscc *BSCC) Init(stub shim.ChaincodeStubInterface) pb.Response {
 }
 
 func (bscc *BSCC) Invoke(stub shim.ChaincodeStubInterface) pb.Response {
-	args := stub.GetArgs()
-	if len(args) < 1 {
-		return shim.Error("invalid args")
-	}
-
-	function := string(args[0])
-
-	bloccProtoLogger.Debugf("Invoke BSCC function: %s", function)
-
-	//TODO: do I need to handle ACL?
-
-	switch function {
-	case ApproveSensoryReading:
-		// TODO: mspID is a string and idBytes is a byte array. Need to convert them to the right types.
-		// Also technically this function is never used, so it's not a priority.
-		// Check for the right number of args
-		if len(args) != 3 {
-			return shim.Error("incorrect number of arguments. Expecting 3")
-		}
-
-		mspID := string(args[1])
-		idBytes := args[2]
-
-		response := bscc.sendApprovalToOrderer(mspID, idBytes)
-		if response.Status != shim.OK {
-			return shim.Error("Approval block was not uploaded due to: " + response.GetMessage())
-		}
-		return shim.Success([]byte("OK"))
-	}
-
-	return shim.Error(InvalidFunctionError(function).Error())
+	return shim.Error("[BLOCC System CC] This invoke function is not allowed for external calls," +
+		" only internal calls are allowed.")
 }
 
 // ----------------- BSCC Implementation ----------------- //
 
-func (bscc *BSCC) sendApprovalToOrderer(mspId string, idBytes []byte) pb.Response {
+// TODO: see if it's worth checking if the signer is correct
+func (bscc *BSCC) sendApprovalToOrderer(channelID string) pb.Response {
 	bloccProtoLogger.Debug("sendApprovalToOrderer")
 	var err error
-	bloccProtoLogger.Debug("mspId: " + mspId)
-	bloccProtoLogger.Debug("idBytes: " + string(idBytes))
-	//assemble a signed transaction (it's an Envelope message)
-	creator := protoutil.MarshalOrPanic(&msp.SerializedIdentity{
-		Mspid:   mspId,
-		IdBytes: idBytes,
-	})
-	//serializedIdentity, err := approver.Serialize()
-	//if err != nil {
-	//	fmt.Printf("Error serializing the signing identity: %v\n", err)
-	//	return
-	//}
 
-	nonce := protoutil.CreateNonceOrPanic()
-	txId := protoutil.ComputeTxID(nonce, creator)
 	signer, _ := common.GetDefaultSigner()
-	bloccProtoLogger.Debug("signer: " + signer.GetMSPIdentifier())
-	env, envErr := protoutil.CreateSignedEnvelope(cb.HeaderType_PEER_SIGNATURE_TX, "mychannel", signer, &cb.Envelope{}, 0, 0)
+	env, txID, envErr := protoutil.CreateSignedEnvelopeWithTxID(
+		cb.HeaderType_PEER_SIGNATURE_TX,
+		channelID,
+		signer,
+		&cb.Envelope{},
+		0,
+		0,
+	)
 	if envErr != nil {
 		bloccProtoLogger.Fatal("Error creating signed envelope: " + envErr.Error())
 	}
 
-	//env := &cb.Envelope{
-	//	Payload: protoutil.MarshalOrPanic(&cb.Payload{
-	//		Header: &cb.Header{
-	//			ChannelHeader: protoutil.MarshalOrPanic(&cb.ChannelHeader{
-	//				Type:    int32(cb.HeaderType_PEER_SIGNATURE_TX),
-	//				Version: int32(0),
-	//				Timestamp: &timestamp.Timestamp{
-	//					Seconds: time.Now().Unix(),
-	//					Nanos:   0,
-	//				},
-	//				TxId:      txId,
-	//				ChannelId: "mychannel",
-	//				Epoch:     0,
-	//			}),
-	//			SignatureHeader: protoutil.MarshalOrPanic(&cb.SignatureHeader{
-	//				Creator: creator,
-	//				Nonce:   nonce,
-	//			}),
-	//		},
-	//		Data: []byte{},
-	//	}),
-	//	Signature: signature,
-	//}
-	//From the below, clientCertificate can be obtianed
+	dg, ctx := bscc.createDeliverGroupAndContext(txID)
 
-	var dg *chaincode.DeliverGroup
-	var ctx context.Context
-	if bscc.config.WaitForEvent {
-		var cancelFunc context.CancelFunc
-		ctx, cancelFunc = context.WithTimeout(context.Background(), bscc.config.WaitForEventTimeout)
-		defer cancelFunc()
-
-		dg, err = createDeliverGroup(&bscc.config, txId)
-		if err != nil {
-			bloccProtoLogger.Errorf("Failed to create deliver group: %s", err)
-		}
-		bloccProtoLogger.Debug("Created deliver group")
-		// connect to deliver service on all peers
-		err = dg.Connect(ctx)
-		if err != nil {
-			bloccProtoLogger.Errorf("Failed to connect to deliver service: %s", err)
-			return shim.Error("Failed to connect to deliver service: " + err.Error())
-		}
-
+	if dg == nil && ctx == nil {
+		return shim.Error("Failed to create deliver group or context.")
 	}
 
-	bloccProtoLogger.Debug("Sending transaction to orderer with id %s", txId)
 	broadcastClient, err := createBroadcastClient(&bscc.config)
-	bloccProtoLogger.Debugf("Got broadcast client: %v", broadcastClient)
 
 	if err != nil {
-		bloccProtoLogger.Errorf("Failed to retrieve broadcast client: %s", err)
 		return shim.Error("Failed to retrieve broadcast client: " + err.Error())
 	}
 	if err = broadcastClient.Send(env); err != nil {
-		bloccProtoLogger.Errorf("Failed to send transaction: %s", err)
 		return shim.Error("Failed to send transaction: " + err.Error())
 	}
-	bloccProtoLogger.Debug("Transaction sent to orderer")
 
 	if dg != nil && ctx != nil {
 		// wait for event that contains the txID from all peers
@@ -220,12 +136,148 @@ func (bscc *BSCC) sendApprovalToOrderer(mspId string, idBytes []byte) pb.Respons
 			return shim.Error("Failed to wait for event: " + err.Error())
 		}
 	}
-	bloccProtoLogger.Debug("End of sendApprovalToOrderer")
 	return shim.Success(nil)
 }
 
-func (bscc *BSCC) processEvent(event event.Event) {
-	bloccProtoLogger.Info("Received event: ", event)
+//func (bscc *BSCC) sendApprovalToOrderer2(channelID string) pb.Response {
+//	bloccProtoLogger.Debug("sendApprovalToOrderer")
+//	var err error
+//
+//	signer, _ := common.GetDefaultSigner()
+//
+//	proposal, txID, err := bscc.createProposal(channelID, txID, signer)
+//	if err != nil {
+//		return shim.Error("failed to create proposal: " + err.Error())
+//	}
+//
+//	signedProposal, err := bscc.signProposal(proposal, signer)
+//	if err != nil {
+//		return shim.Error("failed to sign proposal: " + err.Error())
+//	}
+//
+//	var responses []*pb.ProposalResponse
+//	for _, endorser := range c.EndorserClients {
+//		proposalResponse, err := endorser.ProcessProposal(context.Background(), signedProposal)
+//		if err != nil {
+//			return errors.WithMessage(err, "failed to endorse proposal")
+//		}
+//		responses = append(responses, proposalResponse)
+//	}
+//
+//	if len(responses) == 0 {
+//		// this should only be empty due to a programming bug
+//		return errors.New("no proposal responses received")
+//	}
+//
+//	// all responses will be checked when the signed transaction is created.
+//	// for now, just set this so we check the first response's status
+//	proposalResponse := responses[0]
+//
+//	if proposalResponse == nil {
+//		return errors.New("received nil proposal response")
+//	}
+//
+//	if proposalResponse.Response == nil {
+//		return errors.New("received proposal response with nil response")
+//	}
+//
+//	if proposalResponse.Response.Status != int32(cb.Status_SUCCESS) {
+//		return errors.Errorf("proposal failed with status: %d - %s", proposalResponse.Response.Status, proposalResponse.Response.Message)
+//	}
+//	// assemble a signed transaction (it's an Envelope message)
+//	env, err := protoutil.CreateSignedTx(proposal, c.Signer, responses...)
+//	if err != nil {
+//		return errors.WithMessage(err, "failed to create signed transaction")
+//	}
+//
+//	dg, ctx := bscc.createDeliverGroupAndContext(txID)
+//
+//	if dg == nil && ctx == nil {
+//		return shim.Error("Failed to create deliver group or context.")
+//	}
+//
+//	broadcastClient, err := createBroadcastClient(&bscc.config)
+//
+//	if err != nil {
+//		return shim.Error("Failed to retrieve broadcast client: " + err.Error())
+//	}
+//	if err = broadcastClient.Send(env); err != nil {
+//		return shim.Error("Failed to send transaction: " + err.Error())
+//	}
+//
+//	if dg != nil && ctx != nil {
+//		// wait for event that contains the txID from all peers
+//		err = dg.Wait(ctx)
+//		if err != nil {
+//			bloccProtoLogger.Errorf("Failed to wait for event: %s", err)
+//			return shim.Error("Failed to wait for event: " + err.Error())
+//		}
+//	}
+//	return shim.Success(nil)
+//}
+//
+//func (bscc *BSCC) createProposal(channelID string, inputTxID string, signer msp.SigningIdentity) (proposal *pb.Proposal, txID string, err error) {
+//	args := &lb.CommitChaincodeDefinitionArgs{
+//		Name:              "bscc",
+//		Version:           "1",
+//		Sequence:          1,
+//		EndorsementPlugin: "escc",
+//		ValidationPlugin:  "vscc",
+//	}
+//
+//	argsBytes, err := proto.Marshal(args)
+//	if err != nil {
+//		return nil, "", err
+//	}
+//	ccInput := &pb.ChaincodeInput{Args: [][]byte{[]byte("")}, argsBytes}
+//
+//	cis := &pb.ChaincodeInvocationSpec{
+//		ChaincodeSpec: &pb.ChaincodeSpec{
+//			ChaincodeId: &pb.ChaincodeID{Name: bscc.Name()},
+//			Input:       ccInput,
+//		},
+//	}
+//
+//	creatorBytes, err := signer.Serialize()
+//	if err != nil {
+//		return nil, "", errors.WithMessage(err, "failed to serialize identity")
+//	}
+//
+//	proposal, txID, err = protoutil.CreateChaincodeProposalWithTxIDAndTransient(cb.HeaderType_ENDORSER_TRANSACTION, channelID, cis, creatorBytes, inputTxID, nil)
+//	if err != nil {
+//		return nil, "", errors.WithMessage(err, "failed to create ChaincodeInvocationSpec proposal")
+//	}
+//
+//	return proposal, txID, nil
+//}
+//
+//func (bscc *BSCC) signProposal(proposal *pb.Proposal, signer msp.SigningIdentity) (*pb.SignedProposal, error) {
+//	// check for nil argument
+//	if proposal == nil {
+//		return nil, errors.New("proposal cannot be nil")
+//	}
+//
+//	if signer == nil {
+//		return nil, errors.New("signer cannot be nil")
+//	}
+//
+//	proposalBytes, err := proto.Marshal(proposal)
+//	if err != nil {
+//		return nil, errors.Wrap(err, "error marshaling proposal")
+//	}
+//
+//	signature, err := signer.Sign(proposalBytes)
+//	if err != nil {
+//		return nil, err
+//	}
+//
+//	return &pb.SignedProposal{
+//		ProposalBytes: proposalBytes,
+//		Signature:     signature,
+//	}, nil
+//}
 
-	bscc.sendApprovalToOrderer(event.MspID, event.IdBytes)
+func (bscc *BSCC) processEvent(event event.Event) {
+	bloccProtoLogger.Info("BLOCC - Received approval event: ", event)
+	bscc.sendApprovalToOrderer(event.ChannelID)
 }

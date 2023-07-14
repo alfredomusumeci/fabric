@@ -8,8 +8,6 @@ package blocksprovider
 
 import (
 	"context"
-	"github.com/golang/protobuf/ptypes/timestamp"
-	"github.com/hyperledger/fabric-protos-go/msp"
 	"math"
 	"time"
 
@@ -111,51 +109,6 @@ type Deliverer struct {
 }
 
 const backoffExponentBase = 1.2
-
-func (d *Deliverer) UploadTxToOrderer(msg *common.Envelope) {
-	d.Logger.Info("Uploading dummy transaction to orderer")
-
-	creator := protoutil.MarshalOrPanic(&msp.SerializedIdentity{
-		Mspid:   "OrgDummyMSPOrderer",
-		IdBytes: []byte("dummy"),
-	})
-	nonce := protoutil.CreateNonceOrPanic()
-
-	env := &common.Envelope{
-		Payload: protoutil.MarshalOrPanic(&common.Payload{
-			Header: &common.Header{
-				ChannelHeader: protoutil.MarshalOrPanic(&common.ChannelHeader{
-					Type:    int32(common.HeaderType_PEER_SIGNATURE_TX),
-					Version: int32(0),
-					Timestamp: &timestamp.Timestamp{
-						Seconds: time.Now().Unix(),
-						Nanos:   0,
-					},
-					TxId:      protoutil.ComputeTxID(nonce, creator),
-					ChannelId: d.ChannelID,
-					Epoch:     0,
-				}),
-				SignatureHeader: protoutil.MarshalOrPanic(&common.SignatureHeader{
-					Creator: creator,
-					Nonce:   nonce,
-				}),
-			},
-			Data: []byte{},
-		}),
-		Signature: []byte("signature"),
-	}
-
-	d.connect(env)
-	d.Logger.Info("Successfully uploaded dummy transaction to orderer")
-}
-
-func (d *Deliverer) ListenToApprovalBlocks(ordererCh chan *common.Envelope) {
-	for msg := range ordererCh {
-		d.Logger.Debug("Received approval block")
-		d.Logger.Debug("Sending approval block to ordering service, content:", msg)
-		d.UploadTxToOrderer(msg)
-	}
-}
 
 // DeliverBlocks used to pull out blocks from the ordering service to
 // distributed them across peers

@@ -68,7 +68,7 @@ type Node struct {
 	gossipMetrics     *metrics.GossipMetrics
 }
 
-func (g *Node) OnBlockCommitted(blockHash []byte) {
+func (g *Node) OnBlockCommitted(txID string) {
 	g.logger.Debug("BLOCC: OnBlockCommitted called")
 	defer g.logger.Debug("BLOCC: OnBlockCommitted finished")
 
@@ -89,7 +89,7 @@ func (g *Node) OnBlockCommitted(blockHash []byte) {
 			ApprovalRequest: &pg.ApprovalMessageRequest{
 				PkiId:        g.comm.GetPKIid(),
 				Channel_MAC:  channel.GenerateMAC(g.comm.GetPKIid(), common.ChannelID("mychannel")),
-				ApprovalHash: blockHash,
+				ApprovalHash: []byte(txID),
 			},
 		},
 	}

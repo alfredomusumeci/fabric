@@ -1,8 +1,9 @@
 package bscc
 
 import (
+	"context"
 	pb "github.com/hyperledger/fabric-protos-go/peer"
-	"github.com/hyperledger/fabric/bccsp/factory"
+	"github.com/hyperledger/fabric/bccsp"
 	"github.com/hyperledger/fabric/internal/peer/chaincode"
 	"github.com/hyperledger/fabric/internal/peer/common"
 	"github.com/hyperledger/fabric/internal/pkg/comm"
@@ -19,6 +20,35 @@ type Config struct {
 	OrgMspID            string
 	WaitForEvent        bool
 	WaitForEventTimeout time.Duration
+	CryptoProvider      bccsp.BCCSP
+}
+
+//type Clients struct {
+//	EndorserClients []pb.EndorserClient
+//	DeliverClients  []pb.DeliverClient
+//}
+
+func (bscc *BSCC) createDeliverGroupAndContext(txID string) (*chaincode.DeliverGroup, context.Context) {
+	var dg *chaincode.DeliverGroup
+	var ctx context.Context
+	if bscc.config.WaitForEvent {
+		var cancelFunc context.CancelFunc
+		ctx, cancelFunc = context.WithTimeout(context.Background(), bscc.config.WaitForEventTimeout)
+		defer cancelFunc()
+
+		var err error
+		dg, err = createDeliverGroup(&bscc.config, txID)
+		if err != nil {
+			bloccProtoLogger.Errorf("Failed to create deliver group: %s", err)
+		}
+		bloccProtoLogger.Debug("Created deliver group")
+		// connect to deliver service on all peers
+		err = dg.Connect(ctx)
+		if err != nil {
+			return nil, nil
+		}
+	}
+	return dg, ctx
 }
 
 // TODO: this is limited to one peer for now, extend this to multiple
@@ -67,23 +97,17 @@ func createDeliverGroup(config *Config, txID string) (*chaincode.DeliverGroup, e
 }
 
 func createBroadcastClient(config *Config) (common.BroadcastClient, error) {
-	bloccProtoLogger.Debug("Creating broadcast client")
-	bloccProtoLogger.Debug("Getting endorser client")
 	endorserClient, err := common.GetEndorserClientFnc(config.PeerAddress, config.TLSCertFile)
 	if err != nil {
 		return nil, errors.WithMessagef(err, "error getting endorser client for bscc chaincode")
 	}
 	endorserClients := []pb.EndorserClient{endorserClient}
-	bloccProtoLogger.Debug("Got endorser client: ", endorserClient)
 
 	signer, err := common.GetDefaultSignerFnc()
 	if err != nil {
 		err = errors.WithMessage(err, "error getting default signer")
 		return nil, err
 	}
-	bloccProtoLogger.Debug("Got signer: ", signer)
-
-	cryptoProvider := factory.GetDefault()
 
 	var broadcastClient common.BroadcastClient
 	bloccProtoLogger.Debug("Len of ordering endpoint: ", len(common.OrderingEndpoint))
@@ -93,7 +117,7 @@ func createBroadcastClient(config *Config) (common.BroadcastClient, error) {
 		}
 		endorserClient := endorserClients[0]
 
-		orderingEndpoints, err := common.GetOrdererEndpointOfChainFnc("mychannel", signer, endorserClient, cryptoProvider)
+		orderingEndpoints, err := common.GetOrdererEndpointOfChainFnc("mychannel", signer, endorserClient, config.CryptoProvider)
 		if err != nil {
 			return nil, errors.WithMessagef(err, "error getting orderer endpoint")
 		}

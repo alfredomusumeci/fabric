@@ -6,8 +6,7 @@ import (
 
 type Event struct {
 	// BSCC Information to send a transaction successfully to the orderer
-	MspID   string
-	IdBytes []byte
+	ChannelID string
 }
 
 type Bus struct {
