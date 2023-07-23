@@ -71,7 +71,7 @@ type Node struct {
 // OnBlockCommitted is called when a sensory transaction has been committed. This is used to
 // send a message approval request for which the sensory transaction is the payload.
 // The request is gossipped around and the peers will respond with an approval or disapproval.
-func (g *Node) OnBlockCommitted(txID string) {
+func (g *Node) OnBlockCommitted(txID string, channelID string) {
 	g.logger.Debug("BLOCC: OnBlockCommitted called")
 	defer g.logger.Debug("BLOCC: OnBlockCommitted finished")
 
@@ -88,20 +88,20 @@ func (g *Node) OnBlockCommitted(txID string) {
 
 	// TODO: this is hardcoded for the channel mychannel, need to be general in future
 	gossipMsg := &pg.GossipMessage{
-		Channel: []byte(common.ChannelID("mychannel")),
+		Channel: common.ChannelID(channelID),
 		Nonce:   util.RandomUInt64(),
 		Tag:     pg.GossipMessage_APPROVAL,
 		Content: &pg.GossipMessage_ApprovalRequest{
 			ApprovalRequest: &pg.ApprovalMessageRequest{
 				PkiId:       g.comm.GetPKIid(),
-				Channel_MAC: channel.GenerateMAC(g.comm.GetPKIid(), common.ChannelID("mychannel")),
+				Channel_MAC: channel.GenerateMAC(g.comm.GetPKIid(), common.ChannelID(channelID)),
 				SensoryTxid: []byte(txID),
 			},
 		},
 	}
 
 	// TODO: this is hardcoded for the channel mychannel, need to be general in future
-	gossipChan := g.chanState.getGossipChannelByChainID(common.ChannelID("mychannel"))
+	gossipChan := g.chanState.getGossipChannelByChainID(common.ChannelID(channelID))
 	if gossipChan != nil {
 		g.Gossip(gossipMsg)
 	}

@@ -108,7 +108,7 @@ type gossipSvc interface {
 	Stop()
 
 	// OnBlockCommitted Gossips block after being committed
-	OnBlockCommitted(txID string)
+	OnBlockCommitted(txID string, channelID string)
 }
 
 // GossipBlockCommitter is an interface that allows the ledger to notify the gossip layer
@@ -116,7 +116,7 @@ type gossipSvc interface {
 // the block to peers.
 type GossipBlockCommitter interface {
 	// OnBlockCommitted Gossips block after being committed
-	OnBlockCommitted(txID string)
+	OnBlockCommitted(txID string, channelID string)
 }
 
 // GossipBlockCommitterImpl Implementation of GossipBlockCommitter
@@ -124,8 +124,8 @@ type GossipBlockCommitterImpl struct {
 	GossipSvc gossipSvc
 }
 
-func (g *GossipBlockCommitterImpl) OnBlockCommitted(txID string) {
-	g.GossipSvc.OnBlockCommitted(txID)
+func (g *GossipBlockCommitterImpl) OnBlockCommitted(txID string, channelID string) {
+	g.GossipSvc.OnBlockCommitted(txID, channelID)
 }
 
 func (g *GossipBlockCommitterImpl) SetGossipSvc(gossipService gossipSvc) {

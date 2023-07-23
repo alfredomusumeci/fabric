@@ -46,7 +46,7 @@ type Initializer struct {
 // the block to peers. See its implementation in gossip_service.go
 type GossipBlockCommitter interface {
 	// OnBlockCommitted Gossips block after being committed
-	OnBlockCommitted(txID string)
+	OnBlockCommitted(txID string, channelID string)
 }
 
 // Config is a structure used to configure a ledger provider.
