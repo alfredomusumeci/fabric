@@ -74,7 +74,8 @@ type kvLedger struct {
 	commitNotifierLock sync.Mutex
 	commitNotifier     *commitNotifier
 
-	// blockCommitter is used to gossip the very last committed block
+	// blockCommitter is used to gossip the very last committed block as
+	// per BLOCC requirements
 	blockCommitter service.GossipBlockCommitter
 }
 
@@ -98,16 +99,32 @@ type lgrInitializer struct {
 	blockCommitter           service.GossipBlockCommitter
 }
 
+// This is a request for checking if a transaction is sensory endorsement transaction.
+// data is the transaction payload, txIndex is the index of the transaction in the block.
 type txSensoryEndorsementCheckRequest struct {
 	data    []byte
 	txIndex int
 }
 
+// This is a response for checking if a transaction is sensory endorsement transaction.
+// txIndex is the index of the transaction in the block.
+// txID is the transaction ID.
+// isSensoryEndorsementTx is true if the transaction is sensory endorsement transaction.
+// err is the error if any.
 type txSensoryEndorsementCheckResult struct {
 	txIndex                int
 	txID                   string
 	isSensoryEndorsementTx bool
 	err                    error
+}
+
+func createSensoryCheckResult(txIndex int, txId string, isSensoryEndorsementTx bool, err error) *txSensoryEndorsementCheckResult {
+	return &txSensoryEndorsementCheckResult{
+		txIndex:                txIndex,
+		txID:                   txId,
+		isSensoryEndorsementTx: isSensoryEndorsementTx,
+		err:                    err,
+	}
 }
 
 func newKVLedger(initializer *lgrInitializer) (*kvLedger, error) {
@@ -608,15 +625,6 @@ func (l *kvLedger) NewHistoryQueryExecutor() (ledger.HistoryQueryExecutor, error
 	return nil, nil
 }
 
-func createSensoryCheckResult(txIndex int, txId string, isSensoryEndorsementTx bool, err error) *txSensoryEndorsementCheckResult {
-	return &txSensoryEndorsementCheckResult{
-		txIndex:                txIndex,
-		txID:                   txId,
-		isSensoryEndorsementTx: isSensoryEndorsementTx,
-		err:                    err,
-	}
-}
-
 // CommitLegacy commits the block and the corresponding pvt data in an atomic operation.
 // It synchronizes commit, snapshot generation and snapshot requests via events and commitProceed channels.
 // Before committing a block, it sends a commitStart event and waits for a message from commitProceed.
@@ -638,9 +646,12 @@ func (l *kvLedger) CommitLegacy(pvtdataAndBlock *ledger.BlockAndPvtData, commitO
 	return nil
 }
 
+// gossipIfSensoryTx checks if the transaction is a sensory transaction and if so, gossips it according to
+// the BLOCC protocol.
 func (l *kvLedger) gossipIfSensoryTx(pvtdataAndBlock *ledger.BlockAndPvtData) {
 	blk := pvtdataAndBlock.Block
-	results := make(chan *txSensoryEndorsementCheckResult, len(blk.Data.Data)) // buffer the channel to prevent goroutines from blocking
+	// buffer the channel to prevent goroutines from blocking
+	results := make(chan *txSensoryEndorsementCheckResult, len(blk.Data.Data))
 
 	var wg sync.WaitGroup
 	for txId, d := range blk.Data.Data {
@@ -667,17 +678,12 @@ func (l *kvLedger) gossipIfSensoryTx(pvtdataAndBlock *ledger.BlockAndPvtData) {
 		}
 	}
 
-	//isEndorsementTx = true
+	// If it is a sensory transaction, trigger the BLOCC protocol
 	if isSensoryTx {
-		// TODO: this should isolate the single tx instead of the block. Will work though on the assumption
-		// that every block is only made of one tx
-		logger.Debug("BLOCC: Checking if blockCommitter is a valid object... ", l.blockCommitter)
-		//TODO: Find a better way to check against != nil given that blockCommitter is an interface
-		//if bc, ok := l.blockCommitter.(service.GossipBlockCommitterImpl); ok && bc != nil {
 		if l.blockCommitter != nil {
-			logger.Debug("BLOCC: Telling blockCommitter...")
-			l.blockCommitter.OnBlockCommitted(txID)
-			logger.Debug("BLOCC: Told blockCommitter")
+			if bc, ok := l.blockCommitter.(*service.GossipBlockCommitterImpl); ok && bc != nil {
+				l.blockCommitter.OnBlockCommitted(txID)
+			}
 		}
 	}
 }
@@ -700,8 +706,6 @@ func (l *kvLedger) checkIfEndorsementTx(req *txSensoryEndorsementCheckRequest) (
 		logger.Warning("BLOCC: Envelope is nil")
 		return nil, "", errors.New("BLOCC: Envelope is nil")
 	}
-
-	logger.Debug("BLOCC: Envelope is not nil")
 
 	payload, err := protoutil.UnmarshalPayload(env.Payload)
 	if err != nil {
@@ -765,10 +769,8 @@ func (l *kvLedger) checkIfSensoryChaincode(txIndex int, txID string, payload *co
 
 	ccName := cis.ChaincodeSpec.ChaincodeId.Name
 	if ccName == "sensor_chaincode" {
-		logger.Debug("BLOCC: Chaincode name is sensor_chaincode")
 		results <- createSensoryCheckResult(txIndex, txID, true, nil)
 	} else {
-		logger.Debug("BLOCC: Chaincode name is not sensor_chaincode")
 		results <- createSensoryCheckResult(txIndex, txID, false, nil)
 	}
 }

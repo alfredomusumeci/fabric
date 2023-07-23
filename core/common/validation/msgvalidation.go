@@ -315,11 +315,8 @@ func ValidateTransaction(e *common.Envelope, cryptoProvider bccsp.BCCSP) (*commo
 		}
 		return payload, pb.TxValidationCode_VALID
 	case common.HeaderType_PEER_SIGNATURE_TX:
-		// These are just "I've seen it" messages, no payload to validate.
-		// For now, just return valid.
-		// TODO: check if the creator is valid (this is actually already done)
-		// TODO: if it has already been seen, return an error.
-
+		// TODO: Approval transactions are endorsement transactions so far. In future releases, they will be peer
+		// signature transaction. Leaving the code here for future use.
 		return payload, pb.TxValidationCode_VALID
 	default:
 		return nil, pb.TxValidationCode_UNSUPPORTED_TX_PAYLOAD

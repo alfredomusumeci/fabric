@@ -68,14 +68,20 @@ type Node struct {
 	gossipMetrics     *metrics.GossipMetrics
 }
 
+// OnBlockCommitted is called when a sensory transaction has been committed. This is used to
+// send a message approval request for which the sensory transaction is the payload.
+// The request is gossipped around and the peers will respond with an approval or disapproval.
 func (g *Node) OnBlockCommitted(txID string) {
 	g.logger.Debug("BLOCC: OnBlockCommitted called")
 	defer g.logger.Debug("BLOCC: OnBlockCommitted finished")
 
-	// TODO: One should check 1. if the peer exists; 2. if the peer is in the channel,
+	// TODO: One should check
+	// 1. if the peer exists;
+	// 2. if the peer is in the channel,
 	// 3. if the peer is online, and lastly that this peer is the one specified by
 	// channelLeader policy
 	if g.selfIdentity.ExtractMSPID() != "Org1MSP" {
+		// TODO: this is hardcoded for Org1MSP, need to be for channel leader
 		g.logger.Debug("BLOCC: Not Org1MSP, returning")
 		return
 	}
@@ -94,11 +100,9 @@ func (g *Node) OnBlockCommitted(txID string) {
 		},
 	}
 
-	g.logger.Debug("BLOCC: Printing the gossip message:", gossipMsg.GetApprovalRequest())
-
+	// TODO: this is hardcoded for the channel mychannel, need to be general in future
 	gossipChan := g.chanState.getGossipChannelByChainID(common.ChannelID("mychannel"))
 	if gossipChan != nil {
-		g.logger.Debug("BLOCC: Gossiping the message")
 		g.Gossip(gossipMsg)
 	}
 }
@@ -447,7 +451,6 @@ func (g *Node) validateMsg(msg protoext.ReceivedMessage) bool {
 		return false
 	}
 
-	// TODO: might want to verify for approval messages too, i.e. check if the identity is who it claims to be
 	if protoext.IsStateInfoMsg(msg.GetGossipMessage().GossipMessage) {
 		if err := g.validateStateInfoMsg(msg.GetGossipMessage()); err != nil {
 			g.logger.Warningf("StateInfo message %v is found invalid: %v", msg, err)
@@ -512,7 +515,7 @@ func (g *Node) gossipBatch(msgs []*emittedGossipMessage) {
 		return protoext.IsLeadershipMsg(o.(*emittedGossipMessage).GossipMessage)
 	}
 
-	// Gossip empty messages
+	// Gossip approval messages
 	approvals, msgs := partitionMessages(isApproval, msgs)
 	g.gossipInChan(approvals, func(gc channel.GossipChannel) filter.RoutingFilter {
 		return filter.CombineRoutingFilters(gc.EligibleForChannel)

@@ -54,6 +54,9 @@ const (
 	Cscc_GetChannelConfig     = "cscc/GetChannelConfig"
 	Cscc_GetChannels          = "cscc/GetChannels"
 
+	// Bscc resources
+	Bscc_ApproveForThisPeer = "bscc/ApproveForThisPeer"
+
 	// Peer resources
 	Peer_Propose              = "peer/Propose"
 	Peer_ChaincodeToChaincode = "peer/ChaincodeToChaincode"

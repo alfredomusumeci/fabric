@@ -387,6 +387,34 @@ func (p *Peer) createChannel(
 	return nil
 }
 
+func (p *Peer) GetOrdererInfo(cid string) (globalAddresses []string, orgAddresses map[string]orderers.OrdererOrg, err error) {
+	p.mutex.Lock()
+	channel, ok := p.channels[cid]
+	p.mutex.Unlock()
+	if !ok {
+		return nil, nil, errors.New("channel not found")
+	}
+
+	bundle := channel.Resources() // Assuming Resources() returns the bundle
+
+	globalAddresses = bundle.ChannelConfig().OrdererAddresses()
+	orgAddresses = map[string]orderers.OrdererOrg{}
+	if ordererConfig, ok := bundle.OrdererConfig(); ok {
+		for orgName, org := range ordererConfig.Organizations() {
+			var certs [][]byte
+			certs = append(certs, org.MSP().GetTLSRootCerts()...)
+			certs = append(certs, org.MSP().GetTLSIntermediateCerts()...)
+
+			orgAddresses[orgName] = orderers.OrdererOrg{
+				Addresses: org.Endpoints(),
+				RootCerts: certs,
+			}
+		}
+	}
+
+	return globalAddresses, orgAddresses, nil
+}
+
 func (p *Peer) Channel(cid string) *Channel {
 	p.mutex.RLock()
 	defer p.mutex.RUnlock()

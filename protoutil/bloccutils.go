@@ -37,7 +37,6 @@ func CreateSignedEnvelopeWithTxIDWithTLSBinding(
 	payloadChannelHeader.TlsCertHash = tlsCertHash
 	var err error
 	payloadSignatureHeader := &common.SignatureHeader{}
-	SetTxID(payloadChannelHeader, payloadSignatureHeader)
 
 	if signer != nil {
 		payloadSignatureHeader, err = NewSignatureHeader(signer)
@@ -57,6 +56,8 @@ func CreateSignedEnvelopeWithTxIDWithTLSBinding(
 			Data:   data,
 		},
 	)
+
+	SetTxID(payloadChannelHeader, payloadSignatureHeader)
 
 	var sig []byte
 	if signer != nil {

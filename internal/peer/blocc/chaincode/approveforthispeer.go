@@ -3,125 +3,215 @@ package chaincode
 import (
 	"context"
 	"crypto/tls"
-	cb "github.com/hyperledger/fabric-protos-go/common"
-	"github.com/spf13/viper"
+	"time"
 
-	"github.com/golang/protobuf/ptypes/timestamp"
-	"github.com/hyperledger/fabric-protos-go/msp"
+	"github.com/golang/protobuf/proto"
+	cb "github.com/hyperledger/fabric-protos-go/common"
 	pb "github.com/hyperledger/fabric-protos-go/peer"
+	lb "github.com/hyperledger/fabric-protos-go/peer/lifecycle"
 	"github.com/hyperledger/fabric/bccsp"
 	"github.com/hyperledger/fabric/internal/peer/chaincode"
 	"github.com/hyperledger/fabric/internal/peer/common"
 	"github.com/hyperledger/fabric/protoutil"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-	"time"
+	"github.com/spf13/viper"
 )
 
-// Committer holds the dependencies needed to commit
-// a chaincode
-type Committer struct {
+type ApproveForThisPeer struct {
 	Certificate     tls.Certificate
 	Command         *cobra.Command
 	BroadcastClient common.BroadcastClient
-	EndorserClients []EndorserClient
 	DeliverClients  []pb.DeliverClient
+	EndorserClients []EndorserClient
+	Input           *ApproveForThisPeerInput
 	Signer          Signer
 }
 
-var chaincodeApproveCmd *cobra.Command
+type ApproveForThisPeerInput struct {
+	OrdererAddress        string
+	RootCertFilePath      string
+	ChannelID             string
+	TxID                  string
+	PeerAddress           string
+	ConnectionProfilePath string
+	WaitForEvent          bool
+	WaitForEventTimeout   time.Duration
+}
 
-// approveForThisPeerCmd returns the cobra command for Chaincode ApproveSensoryReadingForThisPeer
-func ApproveForThisPeerCmd(cryptoProvider bccsp.BCCSP) *cobra.Command {
-	chaincodeApproveCmd = &cobra.Command{
-		Use:   "approveForThisPeer",
+func (a *ApproveForThisPeerInput) Validate() error {
+	if a.ChannelID == "" {
+		return errors.New("ChannelID not specified")
+	}
+	if a.TxID == "" {
+		return errors.New("TxID not specified")
+	}
+	if a.PeerAddress == "" {
+		return errors.New("PeerAddresses not specified")
+	}
+	if a.OrdererAddress == "" {
+		return errors.New("OrdererAddress not specified")
+	}
+	if a.RootCertFilePath == "" {
+		return errors.New("RootCertFilePath not specified")
+	}
+	return nil
+}
+
+func ApproveForThisPeerCmd(a *ApproveForThisPeer, cryptoProvider bccsp.BCCSP) *cobra.Command {
+	chaincodeApproveForThisPeerCmd := &cobra.Command{
+		Use:   "approveforthispeer",
 		Short: "FOR INTERNAL USE ONLY. Approve a sensory reading for this peer",
 		Long:  "FOR INTERNAL USE ONLY. Approve a sensory reading for this peer",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ccInput := &ClientConnectionsInput{
-				CommandName:      cmd.Name(),
-				EndorserRequired: false,
-				OrdererRequired:  true,
-				ChannelID:        channelID,
-				PeerAddresses:    peerAddresses,
-				//TLSRootCertFiles:      tlsRootCertFiles,
-				//ConnectionProfilePath: connectionProfilePath,
-				TLSEnabled: viper.GetBool("peer.tls.enabled"),
-			}
-			cc, err := NewClientConnections(ccInput, cryptoProvider)
-			if err != nil {
-				return err
-			}
+			if a == nil {
+				// Log every input element
+				logger.Debugf("OrdererAddress: %v", ordererAddress)
+				logger.Debugf("RootCertFilePath: %v", rootCertFilePath)
+				logger.Debugf("channelID: %v", channelID)
+				logger.Debugf("txID: %v", txID)
+				logger.Debugf("peerAddress: %v", peerAddress)
+				logger.Debugf("connectionProfilePath: %v", connectionProfilePath)
+				logger.Debugf("waitForEvent: %v", waitForEvent)
+				logger.Debugf("waitForEventTimeout: %v", waitForEventTimeout)
 
-			c := &Committer{
-				Command:         cmd,
-				Certificate:     cc.Certificate,
-				BroadcastClient: cc.BroadcastClient,
-				DeliverClients:  cc.DeliverClients,
-				Signer:          cc.Signer,
-			}
+				input, err := a.createInput()
+				if err != nil {
+					return err
+				}
 
-			return c.chaincodeApprove()
+				// Log every input element
+				logger.Debugf("OrdererAddress: %v", input.OrdererAddress)
+				logger.Debugf("RootCertFilePath: %v", input.RootCertFilePath)
+				logger.Debugf("channelID: %v", input.ChannelID)
+				logger.Debugf("txID: %v", input.TxID)
+				logger.Debugf("peerAddress: %v", input.PeerAddress)
+				logger.Debugf("connectionProfilePath: %v", input.ConnectionProfilePath)
+				logger.Debugf("waitForEvent: %v", input.WaitForEvent)
+				logger.Debugf("waitForEventTimeout: %v", input.WaitForEventTimeout)
+
+				ccInput := &ClientConnectionsInput{
+					CommandName:           cmd.Name(),
+					EndorserRequired:      true,
+					OrdererRequired:       true,
+					OrderingEndpoint:      ordererAddress,
+					OrdererCAFile:         rootCertFilePath,
+					ChannelID:             channelID,
+					PeerAddresses:         []string{peerAddress},
+					TLSRootCertFiles:      []string{tlsRootCertFile},
+					ConnectionProfilePath: connectionProfilePath,
+					TLSEnabled:            viper.GetBool("peer.tls.enabled"),
+				}
+
+				cc, err := NewClientConnections(ccInput, cryptoProvider)
+				if err != nil {
+					return err
+				}
+
+				endorserClients := make([]EndorserClient, len(cc.EndorserClients))
+				for i, e := range cc.EndorserClients {
+					endorserClients[i] = e
+				}
+
+				a = &ApproveForThisPeer{
+					Command:         cmd,
+					Input:           input,
+					Certificate:     cc.Certificate,
+					BroadcastClient: cc.BroadcastClient,
+					DeliverClients:  cc.DeliverClients,
+					EndorserClients: endorserClients,
+					Signer:          cc.Signer,
+				}
+			}
+			return a.Approve()
 		},
 	}
 
-	return chaincodeApproveCmd
+	flagList := []string{
+		"ordererAddress",
+		"rootCertFilePath",
+		"channelID",
+		"txID",
+		"peerAddress",
+		"tlsRootCertFile",
+		"connectionProfile",
+		"waitForEvent",
+		"waitForEventTimeout",
+	}
+	attachFlags(chaincodeApproveForThisPeerCmd, flagList)
+
+	return chaincodeApproveForThisPeerCmd
 }
 
-func (c *Committer) chaincodeApprove() error {
-	var err error
+func (a *ApproveForThisPeer) Approve() error {
+	err := a.Input.Validate()
+	if err != nil {
+		return err
+	}
 
-	if c.Command != nil {
+	if a.Command != nil {
 		// Parsing of the command line is done so silence cmd usage
-		c.Command.SilenceUsage = true
+		a.Command.SilenceUsage = true
 	}
 
+	proposal, txIDSubmission, err := a.createProposal(a.Input.TxID)
+	if err != nil {
+		return errors.WithMessage(err, "failed to create proposal")
+	}
+
+	signedProposal, err := signProposal(proposal, a.Signer)
+	if err != nil {
+		return errors.WithMessage(err, "failed to create signed proposal")
+	}
+
+	var responses []*pb.ProposalResponse
+	for _, endorser := range a.EndorserClients {
+		proposalResponse, err := endorser.ProcessProposal(context.Background(), signedProposal)
+		if err != nil {
+			return errors.WithMessage(err, "failed to endorse proposal")
+		}
+		responses = append(responses, proposalResponse)
+	}
+
+	if len(responses) == 0 {
+		// this should only be empty due to a programming bug
+		return errors.New("no proposal responses received")
+	}
+
+	// all responses will be checked when the signed transaction is created.
+	// for now, just set this so we check the first response's status
+	proposalResponse := responses[0]
+
+	if proposalResponse == nil {
+		return errors.New("received nil proposal response")
+	}
+
+	if proposalResponse.Response == nil {
+		return errors.Errorf("received proposal response with nil response")
+	}
+
+	if proposalResponse.Response.Status != int32(cb.Status_SUCCESS) {
+		return errors.Errorf("proposal failed with status: %d - %s", proposalResponse.Response.Status, proposalResponse.Response.Message)
+	}
 	// assemble a signed transaction (it's an Envelope message)
-	creator := protoutil.MarshalOrPanic(&msp.SerializedIdentity{
-		Mspid:   "OrgDummyMSPOrderer",
-		IdBytes: []byte("dummy"),
-	})
-	nonce := protoutil.CreateNonceOrPanic()
-	txId := protoutil.ComputeTxID(nonce, creator)
-
-	env := &cb.Envelope{
-		Payload: protoutil.MarshalOrPanic(&cb.Payload{
-			Header: &cb.Header{
-				ChannelHeader: protoutil.MarshalOrPanic(&cb.ChannelHeader{
-					Type:    int32(cb.HeaderType_PEER_SIGNATURE_TX),
-					Version: int32(0),
-					Timestamp: &timestamp.Timestamp{
-						Seconds: time.Now().Unix(),
-						Nanos:   0,
-					},
-					TxId:      txId,
-					ChannelId: "mychannel",
-					Epoch:     0,
-				}),
-				SignatureHeader: protoutil.MarshalOrPanic(&cb.SignatureHeader{
-					Creator: creator,
-					Nonce:   nonce,
-				}),
-			},
-			Data: []byte{},
-		}),
-		Signature: []byte("signature"),
+	env, err := protoutil.CreateSignedTx(proposal, a.Signer, responses...)
+	if err != nil {
+		return errors.WithMessage(err, "failed to create signed transaction")
 	}
-
 	var dg *chaincode.DeliverGroup
 	var ctx context.Context
-	if waitForEvent {
+	if a.Input.WaitForEvent {
 		var cancelFunc context.CancelFunc
-		ctx, cancelFunc = context.WithTimeout(context.Background(), waitForEventTimeout)
+		ctx, cancelFunc = context.WithTimeout(context.Background(), a.Input.WaitForEventTimeout)
 		defer cancelFunc()
 
 		dg = chaincode.NewDeliverGroup(
-			c.DeliverClients,
-			make([]string, len(c.DeliverClients)),
-			c.Signer,
-			c.Certificate,
-			channelID,
-			txId,
+			a.DeliverClients,
+			[]string{a.Input.PeerAddress},
+			a.Signer,
+			a.Certificate,
+			a.Input.ChannelID,
+			txIDSubmission,
 		)
 		// connect to deliver service on all peers
 		err := dg.Connect(ctx)
@@ -130,7 +220,7 @@ func (c *Committer) chaincodeApprove() error {
 		}
 	}
 
-	if err = c.BroadcastClient.Send(env); err != nil {
+	if err = a.BroadcastClient.Send(env); err != nil {
 		return errors.WithMessage(err, "failed to send transaction")
 	}
 
@@ -141,5 +231,73 @@ func (c *Committer) chaincodeApprove() error {
 			return err
 		}
 	}
+
 	return err
+}
+
+func (a *ApproveForThisPeer) createInput() (*ApproveForThisPeerInput, error) {
+	logger.Debugf("OrdererAddress: %v", ordererAddress)
+	logger.Debugf("RootCertFilePath: %v", rootCertFilePath)
+	logger.Debugf("channelID: %v", channelID)
+	logger.Debugf("txID: %v", txID)
+	logger.Debugf("waitForEvent: %v", waitForEvent)
+	logger.Debugf("waitForEventTimeout: %v", waitForEventTimeout)
+	logger.Debugf("peerAddress: %v", peerAddress)
+
+	input := &ApproveForThisPeerInput{
+		OrdererAddress:      ordererAddress,
+		RootCertFilePath:    rootCertFilePath,
+		ChannelID:           channelID,
+		TxID:                txID,
+		WaitForEvent:        waitForEvent,
+		WaitForEventTimeout: waitForEventTimeout,
+		PeerAddress:         peerAddress,
+	}
+	logger.Debugf("ApproveForThisPeerCmd: input: %+v", input)
+
+	return input, nil
+}
+
+func (a *ApproveForThisPeer) createProposal(inputTxID string) (proposal *pb.Proposal, txID string, err error) {
+	if a.Signer == nil {
+		return nil, "", errors.New("nil signer provided")
+	}
+
+	args := &lb.ApproveSensoryTxArgs{
+		TxId: inputTxID,
+	}
+
+	argsBytes, err := proto.Marshal(args)
+	if err != nil {
+		return nil, "", err
+	}
+	ccInput := &pb.ChaincodeInput{
+		Args: append([][]byte{[]byte(approveFuncName)}, argsBytes),
+	}
+
+	cis := &pb.ChaincodeInvocationSpec{
+		ChaincodeSpec: &pb.ChaincodeSpec{
+			ChaincodeId: &pb.ChaincodeID{Name: bloccName},
+			Input:       ccInput,
+		},
+	}
+
+	creatorBytes, err := a.Signer.Serialize()
+	if err != nil {
+		return nil, "", errors.WithMessage(err, "failed to serialize identity")
+	}
+
+	proposal, txID, err = protoutil.CreateChaincodeProposalWithTxIDAndTransient(
+		cb.HeaderType_ENDORSER_TRANSACTION,
+		a.Input.ChannelID,
+		cis,
+		creatorBytes,
+		"",
+		nil,
+	)
+	if err != nil {
+		return nil, "", errors.WithMessage(err, "failed to create ChaincodeInvocationSpec proposal")
+	}
+
+	return proposal, txID, nil
 }

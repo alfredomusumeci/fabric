@@ -151,6 +151,7 @@ func (pit PeerIdentityType) String() string {
 	return string(rawJSON)
 }
 
+// ExtractMSPID returns the MSP-ID of this PeerIdentityType
 func (pit PeerIdentityType) ExtractMSPID() string {
 	base64Representation := base64.StdEncoding.EncodeToString(pit)
 	sID := &msp.SerializedIdentity{}

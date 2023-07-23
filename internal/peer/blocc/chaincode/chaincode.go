@@ -11,34 +11,39 @@ import (
 )
 
 const (
-	bloccName       = "_blocc"
-	approveFuncName = "ApproveSensoryReadingForThisPeer"
-	infoFuncName    = "Usage"
+	bloccName       = "bscc"
+	approveFuncName = "ApproveSensoryReading"
 )
 
 var logger = flogging.MustGetLogger("cli.blocc.chaincode")
 
 // Cmd returns the cobra command for Chaincode
 func Cmd(cryptoProvider bccsp.BCCSP) *cobra.Command {
-	chaincodeCmd.PersistentFlags()
+	//addFlags(chaincodeCmd)
 
-	//chaincodeCmd.AddCommand(InfoCmd(nil, cryptoProvider))
-	chaincodeCmd.AddCommand(ApproveForThisPeerCmd(cryptoProvider))
+	chaincodeCmd.AddCommand(ApproveForThisPeerCmd(nil, cryptoProvider))
+
+	logger.Debugf("bloccCmd: %v", chaincodeCmd)
 
 	return chaincodeCmd
 }
 
 var (
-	channelID           string
-	peerAddresses       []string
-	waitForEvent        bool
-	waitForEventTimeout time.Duration
+	ordererAddress        string
+	rootCertFilePath      string
+	channelID             string
+	txID                  string
+	peerAddress           string
+	tlsRootCertFile       string
+	connectionProfilePath string
+	waitForEvent          bool
+	waitForEventTimeout   time.Duration
 )
 
 var chaincodeCmd = &cobra.Command{
-	Use:   "_blocc",
-	Short: "Perform _blocc protocol related operations, not intended to be called directly by end users",
-	Long:  "Perform _blocc protocol related operations, not intended to be called directly by end users",
+	Use:   "bscc",
+	Short: "Perform blocc protocol related operations, not intended to be called directly by end users",
+	Long:  "Perform blocc protocol related operations, not intended to be called directly by end users",
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		common.InitCmd(cmd, args)
 	},
@@ -54,8 +59,15 @@ func init() {
 func ResetFlags() {
 	flags = &pflag.FlagSet{}
 
+	flags.StringVarP(&ordererAddress, "ordererAddress", "o", "", "The address of the orderer to connect to")
+	flags.StringVarP(&rootCertFilePath, "rootCertFilePath", "", "", "If TLS is enabled, the path to the TLS root cert file of the orderer to connect to")
 	flags.StringVarP(&channelID, "channelID", "c", "", "The channel on which this command should be executed")
-	flags.StringArrayVarP(&peerAddresses, "peerAddresses", "", []string{""}, "The addresses of the peers to connect to")
+	flags.StringVarP(&txID, "txID", "t", "", "The transaction ID to approve using for this command")
+	flags.StringVarP(&peerAddress, "peerAddress", "", "", "The address of the peer to connect to")
+	flags.StringVarP(&tlsRootCertFile, "tlsRootCertFile", "", "",
+		"If TLS is enabled, the paths to the TLS root cert files of the peers to connect to. The order and number of certs specified should match the --peerAddress flag")
+	flags.StringVarP(&connectionProfilePath, "connectionProfile", "", "",
+		"The fully qualified path to the connection profile that provides the necessary connection information for the network. Note: currently only supported for providing peer connection information")
 	flags.BoolVar(&waitForEvent, "waitForEvent", true,
 		"Whether to wait for the event from each peer's deliver filtered service signifying that the transaction has been committed successfully")
 	flags.DurationVar(&waitForEventTimeout, "waitForEventTimeout", 30*time.Second,

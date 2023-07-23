@@ -10,8 +10,8 @@ import (
 func Cmd(cryptoProvider bccsp.BCCSP) *cobra.Command {
 	bloccCmd := &cobra.Command{
 		Use:   "blocc",
-		Short: "Perform blocc operations",
-		Long:  "Perform blocc operations",
+		Short: "Perform bscc operations",
+		Long:  "Perform bscc operations",
 	}
 	bloccCmd.AddCommand(chaincode.Cmd(cryptoProvider))
 

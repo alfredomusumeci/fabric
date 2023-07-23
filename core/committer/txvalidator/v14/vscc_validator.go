@@ -404,13 +404,13 @@ func (v *VsccValidatorImpl) txWritesToNamespace(ns *rwsetutil.NsRwSet) bool {
 }
 
 func IsSysCCAndNotInvokableExternal(name string) bool {
-	return name == "vscc" || name == "escc"
+	return name == "vscc" || name == "escc" || name == "bscc"
 }
 
 func IsSysCC(name string) bool {
-	return name == "vscc" || name == "escc" || name == "lscc" || name == "qscc" || name == "cscc"
+	return name == "vscc" || name == "escc" || name == "lscc" || name == "qscc" || name == "cscc" || name == "bscc"
 }
 
 func IsSysCCAndNotInvokableCC2CC(name string) bool {
-	return name == "vscc" || name == "escc" || name == "cscc"
+	return name == "vscc" || name == "escc" || name == "cscc" || name == "bscc"
 }

@@ -187,31 +187,44 @@ func (v *dispatcherImpl) Dispatch(seq int, payload *common.Payload, envBytes []b
 	// validation will behave differently depending on the chaincode
 
 	// validate *EACH* read write set according to its chaincode's endorsement policy
-	for ns := range wrNamespace {
-		// Get latest chaincode validation plugin name and policy
-		validationPlugin, args, err := v.GetInfoForValidate(chdr, ns)
-		if err != nil {
-			logger.Errorf("GetInfoForValidate for txId = %s returned error: %+v", chdr.TxId, err)
-			return peer.TxValidationCode_INVALID_CHAINCODE, err
-		}
 
-		// invoke the plugin
-		ctx := &Context{
-			Seq:        seq,
-			Envelope:   envBytes,
-			Block:      block,
-			TxID:       chdr.TxId,
-			Channel:    chdr.ChannelId,
-			Namespace:  ns,
-			Policy:     args,
-			PluginName: validationPlugin,
-		}
-		if err = v.invokeValidationPlugin(ctx); err != nil {
-			switch err.(type) {
-			case *commonerrors.VSCCEndorsementPolicyError:
-				return peer.TxValidationCode_ENDORSEMENT_POLICY_FAILURE, err
-			default:
-				return peer.TxValidationCode_INVALID_OTHER_REASON, err
+	// TODO: (BLOCC) the below code is a temporary workaround for the fact that
+	// there is no namespace for bscc. Ideally, bscc should be a separate tx,
+	// i.e. PEER_SIGNATURE_TX, and not ENDORSER_TRANSACTION. However, because
+	// this is mostly an "aesthetic" issue and brings with it many underlying
+	// problems (i.e. change configtxlator to handle new type of txs) or create
+	// an ad-hoc validation system whose only purpose is to validate bscc txs,
+	// we decided to go with this workaround. The workaround is to simply
+	// skip the validation of bscc txs. This is safe because bscc txs are
+	// signed by the peer and therefore, the peer is the only one that can
+	// create them.
+	if ccID != "bscc" {
+		for ns := range wrNamespace {
+			// Get latest chaincode validation plugin name and policy
+			validationPlugin, args, err := v.GetInfoForValidate(chdr, ns)
+			if err != nil {
+				logger.Errorf("GetInfoForValidate for txId = %s returned error: %+v", chdr.TxId, err)
+				return peer.TxValidationCode_INVALID_CHAINCODE, err
+			}
+
+			// invoke the plugin
+			ctx := &Context{
+				Seq:        seq,
+				Envelope:   envBytes,
+				Block:      block,
+				TxID:       chdr.TxId,
+				Channel:    chdr.ChannelId,
+				Namespace:  ns,
+				Policy:     args,
+				PluginName: validationPlugin,
+			}
+			if err = v.invokeValidationPlugin(ctx); err != nil {
+				switch err.(type) {
+				case *commonerrors.VSCCEndorsementPolicyError:
+					return peer.TxValidationCode_ENDORSEMENT_POLICY_FAILURE, err
+				default:
+					return peer.TxValidationCode_INVALID_OTHER_REASON, err
+				}
 			}
 		}
 	}

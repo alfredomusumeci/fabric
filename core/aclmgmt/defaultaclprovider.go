@@ -99,6 +99,9 @@ func newDefaultACLProvider(policyChecker policy.PolicyChecker) defaultACLProvide
 	d.cResourcePolicyMap[resources.Cscc_GetConfigBlock] = CHANNELREADERS
 	d.cResourcePolicyMap[resources.Cscc_GetChannelConfig] = CHANNELREADERS
 
+	//--------------- BSCC resources -----------
+	d.pResourcePolicyMap[resources.Bscc_ApproveForThisPeer] = CHANNELREADERS
+
 	//---------------- non-scc resources ------------
 	//Peer resources
 	d.cResourcePolicyMap[resources.Peer_Propose] = CHANNELWRITERS

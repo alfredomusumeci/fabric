@@ -4,10 +4,10 @@ import (
 	"sync"
 )
 
+// Event - BSCC Information to send a transaction successfully to the orderer
 type Event struct {
-	// BSCC Information to send a transaction successfully to the orderer
 	ChannelID   string
-	SensoryTxID []byte
+	SensoryTxID string
 }
 
 type Bus struct {
@@ -22,6 +22,7 @@ func NewEventBus() *Bus {
 	}
 }
 
+// Subscribe - Subscribe to the event bus to receive events
 func (bus *Bus) Subscribe() <-chan Event {
 	bus.mu.Lock()
 	defer bus.mu.Unlock()
@@ -31,6 +32,7 @@ func (bus *Bus) Subscribe() <-chan Event {
 	return ch
 }
 
+// Unsubscribe - Unsubscribe from the event bus
 func (bus *Bus) Unsubscribe(ch <-chan Event) {
 	bus.mu.Lock()
 	defer bus.mu.Unlock()
@@ -45,6 +47,7 @@ func (bus *Bus) Unsubscribe(ch <-chan Event) {
 	}
 }
 
+// Publish - Publish an event to all subscribers
 func (bus *Bus) Publish(event Event) {
 	bus.mu.Lock()
 	defer bus.mu.Unlock()

@@ -770,10 +770,10 @@ func serve(args []string) error {
 
 	// deploy system chaincodes
 	for _, cc := range []scc.SelfDescribingSysCC{lsccInst, csccInst, qsccInst, bsccInst, lifecycleSCC} {
-		//if enabled, ok := chaincodeConfig.SCCAllowlist[cc.Name()]; !ok || !enabled {
-		//	logger.Infof("not deploying chaincode %s as it is not enabled", cc.Name())
-		//	continue
-		//}
+		if enabled, ok := chaincodeConfig.SCCAllowlist[cc.Name()]; !ok || !enabled {
+			logger.Infof("not deploying chaincode %s as it is not enabled", cc.Name())
+			continue
+		}
 		scc.DeploySysCC(cc, chaincodeSupport)
 		if cc.Name() == "bscc" {
 			bsccInst.Init(nil)

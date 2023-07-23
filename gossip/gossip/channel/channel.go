@@ -9,7 +9,6 @@ package channel
 import (
 	"bytes"
 	"fmt"
-	event "github.com/hyperledger/fabric/common/blocc-events"
 	"reflect"
 	"strconv"
 	"sync"
@@ -17,6 +16,7 @@ import (
 	"time"
 
 	proto "github.com/hyperledger/fabric-protos-go/gossip"
+	event "github.com/hyperledger/fabric/common/blocc-events"
 	common_utils "github.com/hyperledger/fabric/common/util"
 	"github.com/hyperledger/fabric/gossip/api"
 	"github.com/hyperledger/fabric/gossip/comm"
@@ -621,35 +621,29 @@ func (gc *gossipChannel) HandleMessage(msg protoext.ReceivedMessage) {
 	}
 
 	if protoext.IsApprovalRequestMsg(m.GossipMessage) {
-		gc.logger.Debug("BLOCC: Inside HandleMessage For Approval:", m.String())
 		senderIdentity := gc.GetIdentityByPKIID(msg.GetConnectionInfo().ID)
 		receiverPkiId := gc.Self().GetStateInfo().GetPkiId()
 		receiverIdentity := gc.GetIdentityByPKIID(receiverPkiId)
-		txID := m.GetApprovalRequest().GetSensoryTxid()
+		txID := string(m.GetApprovalRequest().GetSensoryTxid())
 
+		// This is a sanity check to make sure that the channel leader (i.e. who created the sensory transaction
+		// does not also approve it, as its approval is implicit already)
 		if bytes.Equal(senderIdentity, receiverIdentity) {
-			gc.logger.Debug("BLOCC: Sender and Receiver are same, so ignoring the message")
+			gc.logger.Info("BLOCC: Sender and Receiver are same, so ignoring the message")
 			return
 		}
 
-		gc.logger.Debug("BLOCC: Sender and Receiver are different, so processing the message")
-		// TODO: figure out what we want in the response if anything at all (maybe have the bscc commit the approval
-		// and then send a response back to the peer that sent the approval request with the tx id)
+		gc.logger.Info("BLOCC: Sender and Receiver are different, so processing the message")
+		// TODO: This is a response to the approval request, it actually does not do anything useful and may be removed.
 		msg.Respond(gc.createApprovalMessageResponse(receiverIdentity))
 
 		event.GlobalEventBus.Publish(event.Event{ChannelID: gc.chainID.String(), SensoryTxID: txID})
 		return
 	}
 
-	// TODO: Not sure if this is needed
+	// TODO: As per above, this is a response to the approval request, it actually does not do anything useful and may be removed.
 	if protoext.IsApprovalResponseMsg(m.GossipMessage) {
-		gc.logger.Debug("BLOCC: Inside HandleMessage For Approval Response:", m.String())
-		//approver, err := common2.GetDefaultSigner()
-		//if err != nil {
-		//	gc.logger.Warning("Could not get approver, skipping approval block")
-		//	return
-		//}
-		//event.GlobalEventBus.Publish(event.Event{Approver: approver})
+		gc.logger.Info("BLOCC: Received Approval Response Message")
 	}
 
 	if protoext.IsStateInfoPullRequestMsg(m.GossipMessage) {
@@ -891,7 +885,7 @@ func (gc *gossipChannel) createStateInfoSnapshot(requestersOrg api.OrgIdentityTy
 	}
 }
 
-// TODO: see if any special processing must happen
+// TODO: will be removed soon, or figure out if a there is any meaningful response to communicate.
 func (gc *gossipChannel) createApprovalMessageResponse(pkiId []byte) *proto.GossipMessage {
 	return &proto.GossipMessage{
 		Channel: gc.chainID,

@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/hyperledger/fabric/bccsp/factory"
+	"github.com/hyperledger/fabric/internal/peer/blocc"
 	"github.com/hyperledger/fabric/internal/peer/chaincode"
 	"github.com/hyperledger/fabric/internal/peer/channel"
 	"github.com/hyperledger/fabric/internal/peer/common"
@@ -49,7 +50,7 @@ func main() {
 	mainCmd.AddCommand(chaincode.Cmd(nil, cryptoProvider))
 	mainCmd.AddCommand(channel.Cmd(nil))
 	mainCmd.AddCommand(lifecycle.Cmd(cryptoProvider))
-	//mainCmd.AddCommand(blocc.Cmd(cryptoProvider))
+	mainCmd.AddCommand(blocc.Cmd(cryptoProvider))
 	mainCmd.AddCommand(snapshot.Cmd(cryptoProvider))
 
 	// On failure Cobra prints the usage message and error string, so we only
