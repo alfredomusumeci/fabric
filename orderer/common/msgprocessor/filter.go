@@ -8,6 +8,7 @@ package msgprocessor
 
 import (
 	"errors"
+	"strings"
 
 	ab "github.com/hyperledger/fabric-protos-go/common"
 	"github.com/hyperledger/fabric/common/channelconfig"
@@ -59,8 +60,22 @@ func (a peerSignatureAcceptRule) Apply(message *ab.Envelope) error {
 		return err
 	}
 
+	// Obtain and unmarshall payload header to get extension
+	payloadHdrExtension, err := protoutil.UnmarshalChaincodeHeaderExtension(chdr.Extension)
+	if err != nil {
+		return err
+	}
+
+	// Check if the payload header extension is empty
+	if payloadHdrExtension == nil || strings.TrimSpace(payloadHdrExtension.String()) == "" {
+		NewSigFilter(policies.ChannelWriters, policies.ChannelOrdererWriters, a.FilterSupport)
+		return nil
+	}
+
+	chaincodeId := payloadHdrExtension.ChaincodeId.Name
+
 	// If the message is sensory, change the signature policy to accept peer signatures
-	if chdr.Type == int32(ab.HeaderType_PEER_SIGNATURE_TX) {
+	if chaincodeId == "bscc" {
 		NewSigFilter(policies.ChannelSensorySigners, policies.ChannelOrdererSensorySigners, a.FilterSupport)
 	} else {
 		NewSigFilter(policies.ChannelWriters, policies.ChannelOrdererWriters, a.FilterSupport)
