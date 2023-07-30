@@ -724,7 +724,7 @@ func serve(args []string) error {
 		factory.GetDefault(),
 	)
 	qsccInst := scc.SelfDescribingSysCC(qscc.New(aclProvider, peerInstance))
-	bsccInst := bscc.New(peerInstance)
+	bsccInst := bscc.New(peerInstance, peerServer, unjoinCmd())
 
 	pb.RegisterChaincodeSupportServer(ccSrv.Server(), ccSupSrv)
 
