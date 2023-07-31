@@ -136,20 +136,20 @@ func (bscc *BSCC) processEvent(event event.Event) {
 	var err error
 	bloccProtoLogger.Info("BLOCC - Received approval event:", event)
 	bloccProtoLogger.Debug("index:", index)
-	if index == 2 {
-		bscc.peerServer.Stop()
-		bscc.unjoin.SetArgs([]string{
-			"--channelID=" + event.ChannelID,
-		})
-		err = bscc.unjoin.Execute()
-		if err != nil {
-			bloccProtoLogger.Errorf("Failed to unjoin channel: %s", err)
-		}
-		err = bscc.peerServer.Start()
-		if err != nil {
-			bloccProtoLogger.Errorf("Failed to start peer server: %s", err)
-		}
-	}
+	//if index == 2 {
+	//	bscc.peerServer.Stop()
+	//	bscc.unjoin.SetArgs([]string{
+	//		"--channelID=" + event.ChannelID,
+	//	})
+	//	err = bscc.unjoin.Execute()
+	//	if err != nil {
+	//		bloccProtoLogger.Errorf("Failed to unjoin channel: %s", err)
+	//	}
+	//	err = bscc.peerServer.Start()
+	//	if err != nil {
+	//		bloccProtoLogger.Errorf("Failed to start peer server: %s", err)
+	//	}
+	//}
 	index++
 	address, rootCertFile, err := bscc.gatherOrdererInfo(event.ChannelID)
 	if err != nil {
