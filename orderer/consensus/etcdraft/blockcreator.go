@@ -7,7 +7,6 @@ SPDX-License-Identifier: Apache-2.0
 package etcdraft
 
 import (
-	"encoding/base64"
 	"github.com/golang/protobuf/proto"
 	cb "github.com/hyperledger/fabric-protos-go/common"
 	"github.com/hyperledger/fabric/common/flogging"
@@ -24,7 +23,6 @@ type blockCreator struct {
 }
 
 func (bc *blockCreator) createNextBlock(envs []*cb.Envelope) *cb.Block {
-	bc.logger.Debugf("Creating next block for chain with height %d", bc.number)
 	data := &cb.BlockData{
 		Data: make([][]byte, len(envs)),
 	}
@@ -51,8 +49,5 @@ func (bc *blockCreator) createNextBlock(envs []*cb.Envelope) *cb.Block {
 
 	bc.hash = protoutil.BlockHeaderHash(block.Header)
 
-	bc.logger.Debug("Block header data hash: ", base64.StdEncoding.EncodeToString(block.Header.DataHash))
-	bc.logger.Debug("Block header previous hash: ", base64.StdEncoding.EncodeToString(block.Header.PreviousHash))
-	bc.logger.Debug("Block header hash: ", base64.StdEncoding.EncodeToString(bc.hash))
 	return block
 }

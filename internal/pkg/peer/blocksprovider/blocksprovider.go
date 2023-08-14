@@ -14,6 +14,7 @@ import (
 	"github.com/hyperledger/fabric-protos-go/common"
 	"github.com/hyperledger/fabric-protos-go/gossip"
 	"github.com/hyperledger/fabric-protos-go/orderer"
+	commonerrors "github.com/hyperledger/fabric/common/errors"
 	"github.com/hyperledger/fabric/common/flogging"
 	gossipcommon "github.com/hyperledger/fabric/gossip/common"
 	"github.com/hyperledger/fabric/internal/pkg/identity"
@@ -61,6 +62,11 @@ type GossipServiceAdapter interface {
 
 	// Gossip the message across the peers
 	Gossip(msg *gossip.GossipMessage)
+
+	// StopChain the gossip service
+	StopChain(chainID string)
+
+	LeaveChan(channelID gossipcommon.ChannelID)
 }
 
 //go:generate counterfeiter -o fake/block_verifier.go --fake-name BlockVerifier . BlockVerifier
@@ -106,6 +112,8 @@ type Deliverer struct {
 	TLSCertHash []byte // util.ComputeSHA256(b.credSupport.GetClientCertificate().Certificate[0])
 
 	sleeper sleeper
+
+	ErrorC chan error
 }
 
 const backoffExponentBase = 1.2
@@ -124,7 +132,6 @@ func (d *Deliverer) DeliverBlocks() {
 	for {
 		select {
 		case <-d.DoneC:
-			d.Logger.Info("Done channel closed, exiting")
 			return
 		default:
 		}
@@ -202,6 +209,14 @@ func (d *Deliverer) DeliverBlocks() {
 					break RecvLoop
 				}
 				err = d.processMsg(response)
+				if _, ok = err.(*commonerrors.ForkedTxError); ok {
+					// Signal the peer to stop accepting new blocks for this channel
+					// and leave the channel, then break the loop, without trying again
+					d.Logger.Warningf("Received FORKED status from ordering service, setting read-only for channel %s", d.ChannelID)
+					d.ErrorC <- err
+					d.Logger.Infof("Done delivering blocks for channel %s", d.ChannelID)
+					return
+				}
 				if err != nil {
 					connLogger.Warningf("Got error while attempting to receive blocks: %v", err)
 					failureCounter++
@@ -226,8 +241,25 @@ func (d *Deliverer) processMsg(msg *orderer.DeliverResponse) error {
 			return errors.Errorf("received success for a seek that should never complete")
 		}
 
+		if t.Status == common.Status_FORKED {
+			d.Logger.Warningf("Received FORKED status from orderer")
+			return &commonerrors.ForkedTxError{}
+		}
+
 		return errors.Errorf("received bad status %v from orderer", t.Status)
 	case *orderer.DeliverResponse_Block:
+		md := &common.Metadata{}
+		err := proto.Unmarshal(t.Block.Metadata.Metadata[common.BlockMetadataIndex_VALIDATION], md)
+
+		if err != nil {
+			d.Logger.Warningf("BLOCC Could not unmarshal metadata from block: %s", err)
+			return errors.WithMessage(err, "BLOCC could not unmarshal metadata from block")
+		}
+		if string(md.Value) == "fork" {
+			d.Logger.Warningf("Received FORKED status from orderer")
+			return &commonerrors.ForkedTxError{}
+		}
+
 		blockNum := t.Block.Header.Number
 		if err := d.BlockVerifier.VerifyBlock(gossipcommon.ChannelID(d.ChannelID), blockNum, t.Block); err != nil {
 			return errors.WithMessage(err, "block from orderer could not be verified")
