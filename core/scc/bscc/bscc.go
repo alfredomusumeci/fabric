@@ -44,6 +44,7 @@ var bloccProtoLogger = flogging.MustGetLogger("bscc")
 
 const (
 	approveSensoryReading string = "ApproveSensoryReading"
+	simulateForkAttempt   string = "SimulateForkAttempt"
 )
 
 // ------------------- Error handling ------------------- //
@@ -116,6 +117,9 @@ func (bscc *BSCC) Invoke(stub shim.ChaincodeStubInterface) pb.Response {
 		txID := args[1]
 		bloccProtoLogger.Infof("ApproveSensoryReading for: %s", txID)
 		return shim.Success(txID)
+	case simulateForkAttempt:
+		bloccProtoLogger.Warningf("Adding a fork block!")
+		return shim.Success(nil)
 	}
 
 	return shim.Error(fmt.Sprintf("Requested function %s not found.", fname))

@@ -9,6 +9,7 @@ package etcdraft
 import (
 	"github.com/golang/protobuf/proto"
 	cb "github.com/hyperledger/fabric-protos-go/common"
+	"github.com/hyperledger/fabric-protos-go/peer"
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/protoutil"
 )
@@ -28,18 +29,28 @@ func (bc *blockCreator) createNextBlock(envs []*cb.Envelope) *cb.Block {
 	}
 
 	var err error
+	var specs *peer.ChaincodeInvocationSpec
+	shouldFork := false
 	for i, env := range envs {
 		data.Data[i], err = proto.Marshal(env)
 		if err != nil {
 			bc.logger.Panicf("Could not marshal envelope: %s", err)
 		}
+
+		specs, err = protoutil.ExtractChaincodeInvocationSpec(data.Data[i])
+		if err != nil {
+			bc.logger.Panicf("Could not extract chaincode invocation spec: %s", err)
+		}
+		bc.logger.Infof("specs: %s", specs)
+		if specs != nil && specs.ChaincodeSpec != nil {
+			funcName := specs.ChaincodeSpec.Input.Args[0]
+			if string(funcName) == "SimulateForkAttempt" {
+				shouldFork = true
+			}
+		}
 	}
 
-	//bc.number++
-
-	if bc.number == 15 {
-		bc.number = 15
-	} else {
+	if !shouldFork {
 		bc.number++
 	}
 

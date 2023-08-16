@@ -171,8 +171,9 @@ type Chain struct {
 	errorCLock sync.RWMutex
 	errorC     chan struct{} // returned by Errored()
 
-	forkCLock sync.RWMutex
-	forkC     chan struct{} // returned by Forked()
+	forkCLock     sync.RWMutex
+	forkCloseOnce sync.Once
+	forkC         chan struct{} // returned by Forked()
 
 	raftMetadataLock     sync.RWMutex
 	confChangeInProgress *raftpb.ConfChange
@@ -901,23 +902,11 @@ func (c *Chain) run() {
 func (c *Chain) writeBlock(block *common.Block, index uint64) {
 	isForkAttempt := c.isPossibleFork(block)
 	if isForkAttempt {
-		// Change chaincode name to display FORK
-		close(c.forkC)
-		err := c.markAsFork(block)
-		if err != nil {
-			c.logger.Errorf("Failed to mark block as fork: %s", err)
-		}
+		c.forkCloseOnce.Do(func() {
+			close(c.forkC)
+		})
 
-		// Have this be pushed to the ledger by tempering with the header number
-		// However, put a "fork" indicator in the metadata so that the peer will know
-		// not to accept this block and to stop the chain
-		md := &common.Metadata{
-			Value: []byte("fork"),
-		}
-		block.Header.Number = c.lastBlock.Header.Number + 1
-		block.Metadata.Metadata[common.BlockMetadataIndex_VALIDATION] = protoutil.MarshalOrPanic(md)
-
-		c.logger.Warningf("Printing block for fork attempt: %s", block)
+		// TODO: the forked block can be retrieved here
 	}
 
 	if block.Header.Number > c.lastBlock.Header.Number+1 {
@@ -946,12 +935,9 @@ func (c *Chain) writeBlock(block *common.Block, index uint64) {
 
 	c.support.WriteBlock(block, m)
 
-	// check if a channel is closed
-
 	if isForkAttempt {
 		c.Halt()
 	}
-	c.logger.Debug("Is chain running:", c.isRunning())
 }
 
 func (c *Chain) markAsFork(block *common.Block) error {

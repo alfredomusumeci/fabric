@@ -181,7 +181,6 @@ func (d *Deliverer) DeliverBlocks() {
 		go func() {
 			for {
 				resp, err := deliverClient.Recv()
-				d.Logger.Debug("Response is: ", resp)
 				if err != nil {
 					connLogger.Warningf("Encountered an error reading from deliver stream: %s", err)
 					close(recv)
@@ -248,18 +247,6 @@ func (d *Deliverer) processMsg(msg *orderer.DeliverResponse) error {
 
 		return errors.Errorf("received bad status %v from orderer", t.Status)
 	case *orderer.DeliverResponse_Block:
-		md := &common.Metadata{}
-		err := proto.Unmarshal(t.Block.Metadata.Metadata[common.BlockMetadataIndex_VALIDATION], md)
-
-		if err != nil {
-			d.Logger.Warningf("BLOCC Could not unmarshal metadata from block: %s", err)
-			return errors.WithMessage(err, "BLOCC could not unmarshal metadata from block")
-		}
-		if string(md.Value) == "fork" {
-			d.Logger.Warningf("Received FORKED status from orderer")
-			return &commonerrors.ForkedTxError{}
-		}
-
 		blockNum := t.Block.Header.Number
 		if err := d.BlockVerifier.VerifyBlock(gossipcommon.ChannelID(d.ChannelID), blockNum, t.Block); err != nil {
 			return errors.WithMessage(err, "block from orderer could not be verified")

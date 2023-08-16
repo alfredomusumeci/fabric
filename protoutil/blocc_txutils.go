@@ -10,7 +10,7 @@ import (
 	"github.com/hyperledger/fabric-protos-go/peer"
 )
 
-func extractChaincodeInvocationSpec(envelopeBytes []byte) (*peer.ChaincodeInvocationSpec, error) {
+func ExtractChaincodeInvocationSpec(envelopeBytes []byte) (*peer.ChaincodeInvocationSpec, error) {
 	// Unmarshal the envelope
 	env := &common.Envelope{}
 	if err := proto.Unmarshal(envelopeBytes, env); err != nil {
@@ -56,7 +56,7 @@ func extractChaincodeInvocationSpec(envelopeBytes []byte) (*peer.ChaincodeInvoca
 }
 
 func ExtractApprovalTxID(envelopeBytes []byte) (string, error) {
-	cis, err := extractChaincodeInvocationSpec(envelopeBytes)
+	cis, err := ExtractChaincodeInvocationSpec(envelopeBytes)
 	if err != nil {
 		return "", err
 	}
@@ -68,7 +68,7 @@ func ExtractApprovalTxID(envelopeBytes []byte) (string, error) {
 }
 
 func IsBscc(envelopeBytes []byte) (bool, error) {
-	cis, err := extractChaincodeInvocationSpec(envelopeBytes)
+	cis, err := ExtractChaincodeInvocationSpec(envelopeBytes)
 	if err != nil {
 		return false, err
 	}
